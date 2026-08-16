@@ -1,55 +1,137 @@
-// @ts-nocheck
-/**
- * 通用认证上下文
- *
- * 基于固定的 API 接口实现，可复用到其他项目
- * 其他项目使用时，只需修改 @api 的导入路径指向项目的 api 模块
- *
- * 注意：
- * - 如果需要登录/鉴权场景，请扩展本文件，完善 login/logout、token 管理、用户信息获取与刷新等逻辑
- * - 将示例中的占位实现替换为项目实际的接口调用与状态管理
- */
-import React, { createContext, useContext, ReactNode } from "react";
-
-interface UserOut {
-
-}
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { Session, User } from '@supabase/supabase-js';
+import { initSupabaseClient, getSupabaseClient, clearSupabaseClient } from '@/lib/supabase';
 
 interface AuthContextType {
-  user: UserOut | null;
-  token: string | null;
+  user: User | null;
+  session: Session | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (token: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUser: (userData: Partial<UserOut>) => void;
+  isConfigReady: boolean;
+  signInWithOtp: (phone: string) => Promise<{ error?: string }>;
+  verifyOtp: (phone: string, token: string) => Promise<{ error?: string }>;
+  signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  session: null,
+  isAuthenticated: false,
+  isLoading: true,
+  isConfigReady: false,
+  signInWithOtp: async () => ({}),
+  verifyOtp: async () => ({}),
+  signOut: async () => { return; },
+});
 
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const value: AuthContextType = {
-    user: null,
-    token: null,
-    isAuthenticated: false,
-    isLoading: false,
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
-    // 登录逻辑，根据项目实际情况实现
-    login: async (token: string) => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isConfigReady, setIsConfigReady] = useState(false);
 
-    // 登出逻辑，根据项目实际情况实现
-    logout: async () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
+  useEffect(() => {
+    let mounted = true;
 
-    // 更新用户信息，根据项目实际情况实现
-    updateUser: () => {}, // eslint-disable-line @typescript-eslint/no-empty-function
-  };
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
-};
+    async function init() {
+      try {
+        await initSupabaseClient();
+        if (!mounted) return;
+        setIsConfigReady(true);
 
-export const useAuth = (): AuthContextType => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
-};
+        const supabase = getSupabaseClient();
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+
+        if (!mounted) return;
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        setIsLoading(false);
+
+        supabase.auth.onAuthStateChange((_event, newSession) => {
+          if (!mounted) return;
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
+          setIsLoading(false);
+        });
+      } catch (error) {
+        console.error('Auth init error:', error);
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    init();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const signInWithOtp = useCallback(async (phone: string) => {
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signInWithOtp({
+        phone: '+86' + phone,
+      });
+      if (error) return { error: error.message };
+      return {};
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  }, []);
+
+  const verifyOtp = useCallback(async (phone: string, token: string) => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: '+86' + phone,
+        token,
+        type: 'sms',
+      });
+      if (error) return { error: error.message };
+
+      // Manually update session and user to ensure synchronous state update
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+      }
+      return {};
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.auth.signOut();
+      setSession(null);
+      setUser(null);
+      clearSupabaseClient();
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  }, []);
+
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        isAuthenticated: !!session,
+        isLoading,
+        isConfigReady,
+        signInWithOtp,
+        verifyOtp,
+        signOut,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
