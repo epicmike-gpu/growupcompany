@@ -67,6 +67,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           "microphonePermission": `成长陪伴精灵App需要访问麦克风以录制视频声音。`,
           "recordAudioAndroid": true
         }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": `成长陪伴精灵App需要使用麦克风，以便小朋友可以和精灵语音对话。`
+        }
       ]
     ],
     "experiments": {

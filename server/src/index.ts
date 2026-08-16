@@ -3,6 +3,7 @@ import cors from "cors";
 import supabaseConfigRouter from "./routes/supabase-config.js";
 import profileRouter from "./routes/profile.js";
 import chatRouter from "./routes/chat.js";
+import voiceRouter from "./routes/voice.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -21,6 +22,7 @@ app.get('/api/v1/health', (_req, res) => {
 app.use('/api/v1/supabase-config', supabaseConfigRouter);
 app.use('/api/v1/profile', profileRouter);
 app.use('/api/v1/chat', chatRouter);
+app.use('/api/v1/voice', voiceRouter);
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}/`);
