@@ -34,6 +34,8 @@ const COMMANDS = [
   { type: 'study', label: '学习', icon: 'book', color: '#AB47BC', bg: '#F3E5F5', shadow: '#AB47BC' },
 ];
 
+const LEARN_CARD = { label: '学英语', icon: 'graduation-cap', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' };
+
 export default function HomeScreen() {
   const router = useSafeRouter();
   const { session } = useAuth();
@@ -150,6 +152,22 @@ export default function HomeScreen() {
           <View style={styles.freeChatText}>
             <Text style={styles.freeChatTitle}>自由聊天</Text>
             <Text style={styles.freeChatSubtitle}>和精灵随便聊聊吧~</Text>
+          </View>
+          <FontAwesome6 name="chevron-right" size={16} color="#8B87A0" />
+        </TouchableOpacity>
+
+        {/* English Learning */}
+        <TouchableOpacity
+          style={[styles.freeChatCard, { backgroundColor: LEARN_CARD.bg }]}
+          onPress={() => router.push('/english')}
+          activeOpacity={0.8}
+        >
+          <View style={[styles.freeChatIcon, { backgroundColor: '#FFF0EC' }]}>
+            <FontAwesome6 name={LEARN_CARD.icon} size={24} color={LEARN_CARD.color} solid />
+          </View>
+          <View style={styles.freeChatText}>
+            <Text style={[styles.freeChatTitle, { color: LEARN_CARD.color }]}>学英语</Text>
+            <Text style={styles.freeChatSubtitle}>卡片对对碰，快乐学英语~</Text>
           </View>
           <FontAwesome6 name="chevron-right" size={16} color="#8B87A0" />
         </TouchableOpacity>

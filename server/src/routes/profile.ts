@@ -49,7 +49,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       // Create profile for new user with 20 free messages
       const { data: newProfile, error: insertError } = await client
         .from('user_profiles')
-        .insert({ user_id: userId, subscription_type: 'free', messages_remaining: 20 })
+        .insert({ user_id: userId, subscription_type: 'free', messages_remaining: 100 })
         .select('id, nickname, age, subscription_type, messages_remaining, created_at')
         .single();
 
