@@ -5,355 +5,371 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  ActivityIndicator,
   Animated,
+  Dimensions,
+  Alert,
 } from 'react-native';
-import { FontAwesome6 } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import { FontAwesome6 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useAuth } from '@/contexts/AuthContext';
 
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
+const API_BASE = `${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/english`;
 
-interface Card {
+interface CardData {
   id: string;
-  en: string;
-  zh: string;
+  pairId: string;
+  text: string;
   emoji: string;
+  type: 'en' | 'cn';
 }
 
-interface GameCard extends Card {
-  uid: string; // unique id for each card instance
-  type: 'en' | 'zh';
-  matched: boolean;
-  flipped: boolean;
+interface LevelConfig {
+  level: number;
+  pairCount: number;
+  timeLimit: number;
+  name: string;
 }
 
-type Theme = { key: string; label: string; emoji: string; color: string };
+interface ThemeInfo {
+  label: string;
+  icon: string;
+  color: string;
+  count: number;
+}
 
-const THEME_ICONS: Record<string, string> = {
-  animals: 'paw',
-  fruits: 'apple-whole',
-  foods: 'utensils',
-};
-
-const THEME_COLORS: Record<string, string[]> = {
-  animals: ['#FF8A65', '#FF7043'],
-  fruits: ['#66BB6A', '#43A047'],
-  foods: ['#FFA726', '#FB8C00'],
-};
+type Screen = 'age' | 'theme' | 'level' | 'game' | 'result';
 
 export default function EnglishScreen() {
   const router = useSafeRouter();
-  const { session } = useAuth();
-  const [themes, setThemes] = useState<Theme[]>([]);
-  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
-  const [cards, setCards] = useState<GameCard[]>([]);
-  const [flippedCards, setFlippedCards] = useState<string[]>([]);
-  const [matchedPairs, setMatchedPairs] = useState(0);
-  const [totalPairs, setTotalPairs] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [gameComplete, setGameComplete] = useState(false);
+  const [screen, setScreen] = useState<Screen>('age');
+  const [ageGroup, setAgeGroup] = useState('3-5');
+  const [theme, setTheme] = useState('animals');
+  const [level, setLevel] = useState(1);
+  const [themes, setThemes] = useState<Record<string, ThemeInfo>>({});
+  const [levels, setLevels] = useState<LevelConfig[]>([]);
+  const [cards, setCards] = useState<CardData[]>([]);
+  const [flipped, setFlipped] = useState<string[]>([]);
+  const [matched, setMatched] = useState<Set<string>>(new Set());
   const [attempts, setAttempts] = useState(0);
-  const animValues = useRef<Record<string, Animated.Value>>({});
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [levelConfig, setLevelConfig] = useState<LevelConfig | null>(null);
+  const [loading, setLoading] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Fetch themes
-  const fetchThemes = useCallback(async () => {
+  // 年龄组
+  const ageGroups = [
+    { key: '3-5', label: '3-5 岁', desc: '基础认知', color: '#FF8FAB', icon: 'baby' },
+    { key: '6-8', label: '6-8 岁', desc: '日常拓展', color: '#4FC3F7', icon: 'child' },
+    { key: '8-10', label: '8-10 岁', desc: '进阶学习', color: '#AB47BC', icon: 'graduation-cap' },
+  ];
+
+  // 获取主题
+  const fetchThemes = useCallback(async (age: string) => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/english/themes`);
-      if (response.ok) {
-        const data = await response.json();
-        setThemes(data);
-      }
+      const res = await fetch(`${API_BASE}/themes?age=${age}`);
+      const data = await res.json();
+      setThemes(data.data || {});
     } catch (error) {
       console.error('Fetch themes error:', error);
     }
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchThemes();
-      // Reset game state when returning
-      setSelectedTheme(null);
-      setCards([]);
-      setFlippedCards([]);
-      setMatchedPairs(0);
-      setGameComplete(false);
-      setAttempts(0);
-    }, [fetchThemes])
-  );
-
-  // Start game with selected theme
-  const startGame = useCallback(async (themeKey: string) => {
-    setLoading(true);
-    setSelectedTheme(themeKey);
-    setFlippedCards([]);
-    setMatchedPairs(0);
-    setGameComplete(false);
-    setAttempts(0);
-
+  // 获取关卡
+  const fetchLevels = useCallback(async (age: string) => {
     try {
-      const response = await fetch(
-        `${API_BASE}/api/v1/english/cards?theme=${themeKey}&count=6`
-      );
-      if (response.ok) {
-        const data = await response.json();
-        // Create pairs: one EN card + one ZH card for each word
-        const gameCards: GameCard[] = [];
-        data.cards.forEach((card: Card) => {
-          const enCard: GameCard = {
-            ...card,
-            uid: `${card.id}_en`,
-            type: 'en',
-            matched: false,
-            flipped: false,
-          };
-          const zhCard: GameCard = {
-            ...card,
-            uid: `${card.id}_zh`,
-            type: 'zh',
-            matched: false,
-            flipped: false,
-          };
-          gameCards.push(enCard, zhCard);
-        });
-        // Shuffle
-        const shuffled = gameCards.sort(() => Math.random() - 0.5);
-        setCards(shuffled);
-        setTotalPairs(data.cards.length);
-      }
+      const res = await fetch(`${API_BASE}/levels?age=${age}`);
+      const data = await res.json();
+      setLevels(data.data || []);
     } catch (error) {
-      console.error('Fetch cards error:', error);
-    } finally {
-      setLoading(false);
+      console.error('Fetch levels error:', error);
     }
   }, []);
 
-  // Get or create animated value for a card
-  const getAnimValue = (uid: string) => {
-    if (!animValues.current[uid]) {
-      animValues.current[uid] = new Animated.Value(1);
+  // 开始游戏
+  const startGame = useCallback(async (lvl: number) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/cards?age=${ageGroup}&theme=${theme}&level=${lvl}`);
+      const data = await res.json();
+      setCards(data.data.cards || []);
+      setLevelConfig(data.data.levelConfig);
+      setFlipped([]);
+      setMatched(new Set());
+      setAttempts(0);
+      setTimeLeft(data.data.levelConfig.timeLimit || 0);
+      setScreen('game');
+    } catch (error) {
+      console.error('Start game error:', error);
+      Alert.alert('错误', '加载游戏失败');
+    } finally {
+      setLoading(false);
     }
-    return animValues.current[uid];
+  }, [ageGroup, theme]);
+
+  // 计时器
+  useEffect(() => {
+    if (screen === 'game' && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => {
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            setScreen('result');
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [screen, timeLeft > 0]);
+
+  // 检查配对
+  useEffect(() => {
+    if (flipped.length === 2) {
+      setAttempts((prev) => prev + 1);
+      const [first, second] = flipped;
+      const card1 = cards.find((c) => c.id === first);
+      const card2 = cards.find((c) => c.id === second);
+
+      if (card1 && card2 && card1.pairId === card2.pairId) {
+        // 配对成功
+        setTimeout(() => {
+          setMatched((prev) => {
+            const newSet = new Set(prev);
+            newSet.add(card1.pairId);
+            newSet.add(card2.pairId);
+            // 检查是否完成
+            if (newSet.size === cards.length) {
+              if (timerRef.current) clearInterval(timerRef.current);
+              setTimeout(() => setScreen('result'), 500);
+            }
+            return newSet;
+          });
+          setFlipped([]);
+        }, 500);
+      } else {
+        // 配对失败
+        setTimeout(() => {
+          setFlipped([]);
+        }, 800);
+      }
+    }
+  }, [flipped, cards]);
+
+  // 翻牌
+  const handleFlip = (cardId: string) => {
+    if (flipped.length >= 2) return;
+    if (flipped.includes(cardId)) return;
+    if (matched.has(cardId)) return;
+    setFlipped((prev) => [...prev, cardId]);
   };
 
-  // Handle card tap
-  const handleCardTap = useCallback(
-    (uid: string) => {
-      if (flippedCards.length >= 2) return;
-      if (flippedCards.includes(uid)) return;
-
-      const card = cards.find((c) => c.uid === uid);
-      if (!card || card.matched) return;
-
-      // Animate flip
-      const animVal = getAnimValue(uid);
-      Animated.sequence([
-        Animated.timing(animVal, { toValue: 0.85, duration: 100, useNativeDriver: true }),
-        Animated.timing(animVal, { toValue: 1, duration: 100, useNativeDriver: true }),
-      ]).start();
-
-      const newFlipped = [...flippedCards, uid];
-      setFlippedCards(newFlipped);
-
-      // Check match when 2 cards flipped
-      if (newFlipped.length === 2) {
-        setAttempts((prev) => prev + 1);
-        const [firstUid, secondUid] = newFlipped;
-        const firstCard = cards.find((c) => c.uid === firstUid)!;
-        const secondCard = cards.find((c) => c.uid === secondUid)!;
-
-        if (firstCard.id === secondCard.id && firstCard.type !== secondCard.type) {
-          // Match!
-          setTimeout(() => {
-            setCards((prev) =>
-              prev.map((c) =>
-                c.uid === firstUid || c.uid === secondUid ? { ...c, matched: true } : c
-              )
-            );
-            setFlippedCards([]);
-            const newMatched = matchedPairs + 1;
-            setMatchedPairs(newMatched);
-            if (newMatched === totalPairs) {
-              setGameComplete(true);
-            }
-          }, 500);
-        } else {
-          // No match - flip back
-          setTimeout(() => {
-            setFlippedCards([]);
-          }, 800);
-        }
-      }
-    },
-    [cards, flippedCards, matchedPairs, totalPairs]
+  // 渲染年龄选择
+  const renderAgeSelection = () => (
+    <View style={styles.content}>
+      <Text style={styles.title}>选择年龄段</Text>
+      <Text style={styles.subtitle}>选择适合小朋友的年龄范围</Text>
+      <View style={styles.ageList}>
+        {ageGroups.map((age) => (
+          <TouchableOpacity
+            key={age.key}
+            style={[styles.ageCard, { backgroundColor: age.color + '20', borderColor: age.color }]}
+            onPress={() => {
+              setAgeGroup(age.key);
+              fetchThemes(age.key);
+              fetchLevels(age.key);
+              setScreen('theme');
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.ageIcon, { backgroundColor: age.color }]}>
+              <FontAwesome6 name={age.icon} size={32} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.ageLabel, { color: age.color }]}>{age.label}</Text>
+            <Text style={styles.ageDesc}>{age.desc}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
   );
 
-  const theme = themes.find((t) => t.key === selectedTheme);
-  const colors = selectedTheme ? THEME_COLORS[selectedTheme] : ['#7C5CFC', '#5A3FD6'];
+  // 渲染主题选择
+  const renderThemeSelection = () => (
+    <View style={styles.content}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('age')}>
+        <FontAwesome6 name="arrow-left" size={20} color="#7C5CFC" />
+      </TouchableOpacity>
+      <Text style={styles.title}>选择主题</Text>
+      <Text style={styles.subtitle}>{ageGroups.find((a) => a.key === ageGroup)?.label}</Text>
+      <View style={styles.themeList}>
+        {Object.entries(themes).map(([key, info]) => (
+          <TouchableOpacity
+            key={key}
+            style={[styles.themeCard, { backgroundColor: info.color + '20', borderColor: info.color }]}
+            onPress={() => {
+              setTheme(key);
+              setScreen('level');
+            }}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.themeIcon, { backgroundColor: info.color }]}>
+              <FontAwesome6 name={info.icon} size={28} color="#FFFFFF" />
+            </View>
+            <Text style={[styles.themeLabel, { color: info.color }]}>{info.label}</Text>
+            <Text style={styles.themeCount}>{info.count} 个单词</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
 
-  // Theme selection screen
-  if (!selectedTheme) {
+  // 渲染关卡选择
+  const renderLevelSelection = () => (
+    <View style={styles.content}>
+      <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('theme')}>
+        <FontAwesome6 name="arrow-left" size={20} color="#7C5CFC" />
+      </TouchableOpacity>
+      <Text style={styles.title}>选择关卡</Text>
+      <Text style={styles.subtitle}>{themes[theme]?.label}主题</Text>
+      <View style={styles.levelList}>
+        {levels.map((lvl) => (
+          <TouchableOpacity
+            key={lvl.level}
+            style={styles.levelCard}
+            onPress={() => startGame(lvl.level)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.levelHeader}>
+              <Text style={styles.levelNum}>第 {lvl.level} 关</Text>
+              <Text style={styles.levelName}>{lvl.name}</Text>
+            </View>
+            <View style={styles.levelInfo}>
+              <Text style={styles.levelDetail}>{lvl.pairCount} 对卡片</Text>
+              {lvl.timeLimit > 0 && <Text style={styles.levelDetail}>{lvl.timeLimit} 秒限时</Text>}
+              {lvl.timeLimit === 0 && <Text style={styles.levelDetail}>不限时</Text>}
+            </View>
+            <FontAwesome6 name="chevron-right" size={16} color="#8B87A0" />
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
+  // 渲染游戏
+  const renderGame = () => {
+    const cols = 4;
+    const cardWidth = (Dimensions.get('window').width - 80) / cols;
+
     return (
-      <Screen>
-        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-              <FontAwesome6 name="chevron-left" size={20} color="#4A4560" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>学英语</Text>
-            <View style={{ width: 36 }} />
-          </View>
-
-          <View style={styles.heroBanner}>
-            <FontAwesome6 name="book-open" size={48} color="#7C5CFC" solid />
-            <Text style={styles.heroTitle}>卡片对对碰</Text>
-            <Text style={styles.heroSubtitle}>选一个主题，翻开卡片配对学英语!</Text>
-          </View>
-
-          <Text style={styles.sectionTitle}>选择主题</Text>
-          <View style={styles.themeGrid}>
-            {themes.map((t) => (
-              <TouchableOpacity
-                key={t.key}
-                style={[styles.themeCard, { backgroundColor: t.color }]}
-                onPress={() => startGame(t.key)}
-                activeOpacity={0.8}
-              >
-                <FontAwesome6 name={THEME_ICONS[t.key] || 'star'} size={36} color="#FFFFFF" solid />
-                <Text style={styles.themeLabel}>{t.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </ScrollView>
-      </Screen>
-    );
-  }
-
-  // Game screen
-  return (
-    <Screen>
-      <View style={styles.gameContainer}>
-        {/* Header */}
+      <View style={styles.gameContent}>
         <View style={styles.gameHeader}>
-          <TouchableOpacity onPress={() => setSelectedTheme(null)} style={styles.backBtn}>
-            <FontAwesome6 name="chevron-left" size={20} color="#4A4560" />
+          <TouchableOpacity onPress={() => setScreen('level')}>
+            <FontAwesome6 name="xmark" size={24} color="#7C5CFC" />
           </TouchableOpacity>
           <View style={styles.gameInfo}>
-            <Text style={styles.gameThemeTitle}>
-              <FontAwesome6 name={THEME_ICONS[selectedTheme] || 'star'} size={16} color={colors[0]} solid />{' '}
-              {theme?.label}
-            </Text>
-            <Text style={styles.gameStats}>
-              已配对 {matchedPairs}/{totalPairs} · 尝试 {attempts} 次
-            </Text>
+            <Text style={styles.gameTitle}>第 {level} 关</Text>
+            {timeLeft > 0 && <Text style={styles.gameTimer}>{timeLeft}s</Text>}
           </View>
-          <View style={{ width: 36 }} />
+          <Text style={styles.gameAttempts}>{attempts} 次</Text>
         </View>
 
-        {/* Progress bar */}
-        <View style={styles.progressTrack}>
+        <View style={styles.progressBar}>
           <View
             style={[
               styles.progressFill,
-              {
-                width: `${totalPairs > 0 ? (matchedPairs / totalPairs) * 100 : 0}%`,
-                backgroundColor: colors[0],
-              },
+              { width: `${(matched.size / cards.length) * 100}%` },
             ]}
           />
         </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors[0]} />
-          </View>
-        ) : gameComplete ? (
-          <View style={styles.completeContainer}>
-            <LinearGradient colors={colors as [string, string]} style={styles.completeCard} start={{ x: 0, y: 0 } as any} end={{ x: 1, y: 1 } as any}>
-              <FontAwesome6 name="trophy" size={64} color="#FFFFFF" solid />
-              <Text style={styles.completeTitle}>太棒了!</Text>
-              <Text style={styles.completeSubtitle}>
-                你用 {attempts} 次完成了所有配对!
-              </Text>
-              <View style={styles.completeBtnRow}>
-                <TouchableOpacity
-                  style={styles.completeBtnOutline}
-                  onPress={() => startGame(selectedTheme)}
-                >
-                  <Text style={styles.completeBtnOutlineText}>再玩一次</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.completeBtnFilled}
-                  onPress={() => setSelectedTheme(null)}
-                >
-                  <Text style={styles.completeBtnFilledText}>换主题</Text>
-                </TouchableOpacity>
-              </View>
-            </LinearGradient>
-          </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.cardGrid}>
-            {cards.map((card) => {
-              const isFlipped = flippedCards.includes(card.uid);
-              const isMatched = card.matched;
-              const showFront = isFlipped || isMatched;
-              const animVal = getAnimValue(card.uid);
+        <View style={styles.cardGrid}>
+          {cards.map((card) => {
+            const isFlipped = flipped.includes(card.id) || matched.has(card.id);
+            const isMatched = matched.has(card.id);
 
-              return (
-                <Animated.View key={card.uid} style={{ transform: [{ scale: animVal }] }}>
-                  <TouchableOpacity
-                    style={[
-                      styles.gameCard,
-                      {
-                        backgroundColor: isMatched
-                          ? '#E8F5E9'
-                          : isFlipped
-                          ? colors[0] + '20'
-                          : '#FFFFFF',
-                        borderColor: isMatched
-                          ? '#66BB6A'
-                          : isFlipped
-                          ? colors[0]
-                          : '#E8E4F0',
-                        borderWidth: 2,
-                      },
-                    ]}
-                    onPress={() => handleCardTap(card.uid)}
-                    activeOpacity={0.8}
-                    disabled={isMatched}
-                  >
-                    {showFront ? (
-                      <>
-                        {card.emoji ? (
-                          <Text style={styles.cardEmoji}>{card.emoji}</Text>
-                        ) : (
-                          <FontAwesome6 name={card.type === 'en' ? 'font' : 'language'} size={28} color="#C4BFD6" />
-                        )}
-                        <Text
-                          style={[
-                            styles.cardText,
-                            { color: isMatched ? '#43A047' : colors[1] },
-                          ]}
-                        >
-                          {card.type === 'en' ? card.en : card.zh}
-                        </Text>
-                        <Text style={styles.cardTypeLabel}>
-                          {card.type === 'en' ? 'English' : '中文'}
-                        </Text>
-                      </>
-                    ) : (
-                      <FontAwesome6 name="question" size={28} color="#C4BFD6" />
-                    )}
-                  </TouchableOpacity>
-                </Animated.View>
-              );
-            })}
-          </ScrollView>
-        )}
+            return (
+              <TouchableOpacity
+                key={card.id}
+                style={[
+                  styles.card,
+                  { width: cardWidth, height: cardWidth * 1.2 },
+                  isFlipped && styles.cardFlipped,
+                  isMatched && styles.cardMatched,
+                ]}
+                onPress={() => handleFlip(card.id)}
+                activeOpacity={0.9}
+              >
+                {isFlipped ? (
+                  <View style={styles.cardFront}>
+                    <Text style={styles.cardEmoji}>{card.emoji}</Text>
+                    <Text style={styles.cardText}>{card.text}</Text>
+                  </View>
+                ) : (
+                  <View style={styles.cardBack}>
+                    <FontAwesome6 name="question" size={32} color="#7C5CFC" />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
+    );
+  };
+
+  // 渲染结果
+  const renderResult = () => {
+    const isPerfect = attempts === cards.length / 2;
+    const isTimeout = timeLeft === 0 && matched.size < cards.length;
+
+    return (
+      <View style={styles.resultContent}>
+        <View style={styles.resultIconContainer}><FontAwesome6 name={isTimeout ? 'clock' : isPerfect ? 'trophy' : 'star'} size={80} color={isTimeout ? '#FF7043' : isPerfect ? '#FFCB57' : '#7C5CFC'} /></View>
+        <Text style={styles.resultTitle}>
+          {isTimeout ? '时间到!' : isPerfect ? '太棒了!' : '完成了!'}
+        </Text>
+        <View style={styles.resultStats}>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{attempts}</Text>
+            <Text style={styles.statLabel}>尝试次数</Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statValue}>{matched.size / 2}</Text>
+            <Text style={styles.statLabel}>配对成功</Text>
+          </View>
+        </View>
+        <View style={styles.resultButtons}>
+          <TouchableOpacity
+            style={[styles.resultBtn, styles.retryBtn]}
+            onPress={() => startGame(level)}
+          >
+            <FontAwesome6 name="rotate-right" size={20} color="#7C5CFC" />
+            <Text style={styles.retryText}>再玩一次</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.resultBtn, styles.homeBtn]}
+            onPress={() => setScreen('age')}
+          >
+            <FontAwesome6 name="house" size={20} color="#8B87A0" />
+            <Text style={styles.homeText}>返回首页</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <Screen>
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        {screen === 'age' && renderAgeSelection()}
+        {screen === 'theme' && renderThemeSelection()}
+        {screen === 'level' && renderLevelSelection()}
+        {screen === 'game' && renderGame()}
+        {screen === 'result' && renderResult()}
+      </ScrollView>
     </Screen>
   );
 }
@@ -361,214 +377,307 @@ export default function EnglishScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F0FF',
+    backgroundColor: '#F0EDFA',
   },
   scrollContent: {
-    padding: 20,
     paddingBottom: 40,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 20,
+  content: {
+    padding: 24,
+    paddingTop: 60,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#2D2B3D',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#8B87A0',
+    marginBottom: 32,
   },
   backBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    position: 'absolute',
+    top: 50,
+    left: 20,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#7C5CFC',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#2D2B3D',
-  },
-  heroBanner: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#7C5CFC',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-  },
-  heroEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  heroTitle: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#2D2B3D',
-    marginBottom: 4,
-  },
-  heroSubtitle: {
-    fontSize: 14,
-    color: '#8B87A0',
-    textAlign: 'center',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#2D2B3D',
-    marginBottom: 16,
-  },
-  themeGrid: {
-    gap: 16,
-  },
-  themeCard: {
-    borderRadius: 20,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.08,
     shadowRadius: 8,
-  },
-  themeEmoji: {
-    fontSize: 36,
-  },
-  themeLabel: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    elevation: 3,
   },
 
-  // Game styles
-  gameContainer: {
+  // 年龄选择
+  ageList: {
+    gap: 16,
+  },
+  ageCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 2,
+    gap: 20,
+  },
+  ageIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ageLabel: {
+    fontSize: 22,
+    fontWeight: '800',
     flex: 1,
-    backgroundColor: '#F5F0FF',
+  },
+  ageDesc: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8B87A0',
+  },
+
+  // 主题选择
+  themeList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+    justifyContent: 'space-between',
+  },
+  themeCard: {
+    width: '48%',
+    padding: 24,
+    borderRadius: 24,
+    borderWidth: 2,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  themeIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  themeLabel: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  themeCount: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B87A0',
+  },
+
+  // 关卡选择
+  levelList: {
+    gap: 12,
+  },
+  levelCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 20,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.7)',
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
+    gap: 16,
+  },
+  levelHeader: {
+    flex: 1,
+  },
+  levelNum: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#2D2B3D',
+  },
+  levelName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#7C5CFC',
+    marginTop: 2,
+  },
+  levelInfo: {
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  levelDetail: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#8B87A0',
+  },
+
+  // 游戏界面
+  gameContent: {
+    flex: 1,
+    padding: 16,
+    paddingTop: 50,
   },
   gameHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
-    paddingBottom: 8,
+    marginBottom: 16,
   },
   gameInfo: {
-    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 16,
   },
-  gameThemeTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+  gameTitle: {
+    fontSize: 20,
+    fontWeight: '800',
     color: '#2D2B3D',
   },
-  gameStats: {
-    fontSize: 12,
-    color: '#8B87A0',
-    marginTop: 2,
+  gameTimer: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FF7043',
   },
-  progressTrack: {
-    height: 6,
-    backgroundColor: '#E8E4F0',
-    marginHorizontal: 16,
-    borderRadius: 3,
-    marginBottom: 12,
+  gameAttempts: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8B87A0',
+  },
+  progressBar: {
+    height: 8,
+    backgroundColor: '#E8E4F5',
+    borderRadius: 4,
+    marginBottom: 20,
+    overflow: 'hidden',
   },
   progressFill: {
-    height: 6,
-    borderRadius: 3,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    height: '100%',
+    backgroundColor: '#7C5CFC',
+    borderRadius: 4,
   },
   cardGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    padding: 12,
     gap: 12,
     justifyContent: 'center',
   },
-  gameCard: {
-    width: 100,
-    height: 120,
+  card: {
     borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#E8E4F5',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  cardEmoji: {
-    fontSize: 32,
+  cardFlipped: {
+    backgroundColor: '#EDE8FF',
+    borderColor: '#7C5CFC',
   },
-  cardText: {
-    fontSize: 16,
-    fontWeight: '700',
+  cardMatched: {
+    backgroundColor: '#E0F8EC',
+    borderColor: '#5ED6A0',
   },
-  cardTypeLabel: {
-    fontSize: 10,
-    color: '#8B87A0',
-  },
-
-  // Complete styles
-  completeContainer: {
+  cardBack: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
   },
-  completeCard: {
-    borderRadius: 28,
-    padding: 32,
+  cardFront: {
+    flex: 1,
     alignItems: 'center',
-    width: '100%',
-    maxWidth: 320,
+    justifyContent: 'center',
+    padding: 8,
   },
-  completeEmoji: {
-    fontSize: 64,
-    marginBottom: 8,
+  cardEmoji: {
+    fontSize: 32,
+    marginBottom: 4,
   },
-  completeTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  completeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  completeBtnRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  completeBtnOutline: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  completeBtnOutlineText: {
-    fontSize: 15,
+  cardText: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: '#2D2B3D',
+    textAlign: 'center',
   },
-  completeBtnFilled: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+
+  // 结果界面
+  resultContent: {
+    flex: 1,
+    padding: 24,
+    paddingTop: 80,
+    alignItems: 'center',
+  },
+  resultIconContainer: {
+    marginBottom: 16,
+  },
+  resultTitle: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#2D2B3D',
+    marginBottom: 32,
+  },
+  resultStats: {
+    flexDirection: 'row',
+    gap: 40,
+    marginBottom: 40,
+  },
+  statItem: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#7C5CFC',
+  },
+  statLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#8B87A0',
+    marginTop: 4,
+  },
+  resultButtons: {
+    flexDirection: 'row',
+    gap: 16,
+    width: '100%',
+  },
+  resultBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    gap: 8,
   },
-  completeBtnFilledText: {
-    fontSize: 15,
+  retryBtn: {
+    backgroundColor: '#EDE8FF',
+  },
+  retryText: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#7C5CFC',
+  },
+  homeBtn: {
+    backgroundColor: '#F0EDFA',
+  },
+  homeText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#8B87A0',
   },
 });

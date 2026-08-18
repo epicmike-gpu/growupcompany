@@ -142,7 +142,7 @@ export default function HomeScreen() {
 
         {/* Free Chat */}
         <TouchableOpacity
-          style={styles.freeChatCard}
+          style={[styles.freeChatCard, styles.actionCard]}
           onPress={() => handleCommand('free_chat')}
           activeOpacity={0.8}
         >
@@ -158,7 +158,7 @@ export default function HomeScreen() {
 
         {/* English Learning */}
         <TouchableOpacity
-          style={[styles.freeChatCard, { backgroundColor: LEARN_CARD.bg }]}
+          style={[styles.freeChatCard, styles.actionCard, { backgroundColor: LEARN_CARD.bg }]}
           onPress={() => router.push('/english')}
           activeOpacity={0.8}
         >
@@ -276,14 +276,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    marginBottom: 24,
+    marginBottom: 28,
+    gap: 12,
   },
   commandCard: {
-    width: '48%',
+    width: '47%',
     borderRadius: 24,
-    padding: 20,
+    padding: 18,
     alignItems: 'center',
-    marginBottom: 16,
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.7)',
     shadowColor: '#7C5CFC',
@@ -324,6 +324,9 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 6,
     gap: 16,
+  },
+  actionCard: {
+    marginBottom: 16,
   },
   freeChatIcon: {
     width: 48,
