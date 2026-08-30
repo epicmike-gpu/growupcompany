@@ -140,6 +140,9 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const autoSoundRef = useRef<Audio.Sound | null>(null);
+  // Resolves the pending auto-play chain when audio is manually stopped
+  const autoPlayResolveRef = useRef<(() => void) | null>(null);
+  const autoPlayCancelledRef = useRef(false);
   const scaleAnim = useMemo(() => new Animated.Value(1), []);
 
   const commandLabel = COMMAND_LABELS[command_type] || '自由聊天';
@@ -210,12 +213,16 @@ export default function ChatScreen() {
         if (data === '[DONE]') {
           sse.close();
           setIsStreaming(false);
+          // Reset the cancel flag so the new auto-play chain is allowed to run
+          autoPlayCancelledRef.current = false;
           // Auto-play: Chinese voice first, then English voice (English Tutor mode)
           const zh = accumulated.trim();
           const en = accumulatedEn.trim();
           if (zh) {
             autoPlayTTS(zh, assistantMessage.id, 'zh').then(() => {
-              if (en) return autoPlayTTS(en, assistantMessage.id, 'en');
+              if (en && !autoPlayCancelledRef.current) {
+                return autoPlayTTS(en, assistantMessage.id, 'en');
+              }
             });
           }
           return;
@@ -271,10 +278,7 @@ export default function ChatScreen() {
           'Content-Type': 'application/json',
           'x-session': token,
         },
-        body: JSON.stringify({
-          text,
-          speaker: lang === 'en' ? 'en_female_amber_rosetts' : undefined,
-        }),
+        body: JSON.stringify({ text }),
       });
 
       const data = await response.json();
@@ -307,41 +311,72 @@ export default function ChatScreen() {
       );
       autoSoundRef.current = null;
     }
+    // If an auto-play chain is pending (e.g. waiting for Chinese to finish
+    // before playing English), resolve it immediately so the chain moves on
+    // (the chain checks autoPlayCancelledRef and skips the next step).
+    autoPlayCancelledRef.current = true;
+    if (autoPlayResolveRef.current) {
+      autoPlayResolveRef.current();
+      autoPlayResolveRef.current = null;
+    }
   };
 
-  const playAudio = async (audioUri: string) => {
-    try {
-      // Stop previous audio before playing new one
-      if (autoSoundRef.current) {
-        await autoSoundRef.current.unloadAsync();
-        autoSoundRef.current = null;
-      }
-
-      // Switch audio mode from recording to playback (iOS)
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-      });
-
-      const { sound } = await Audio.Sound.createAsync(
-        { uri: audioUri },
-        { shouldPlay: true, isLooping: false }
-      );
-      autoSoundRef.current = sound;
-
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync().catch((err: Error) =>
-            console.warn('Failed to unload audio', err)
-          );
-          if (autoSoundRef.current === sound) {
+  const playAudio = (audioUri: string): Promise<void> => {
+    return new Promise((resolve) => {
+      (async () => {
+        try {
+          // Stop previous audio before playing new one
+          if (autoSoundRef.current) {
+            const prev = autoSoundRef.current;
             autoSoundRef.current = null;
+            await prev.unloadAsync().catch((err: Error) =>
+              console.warn('Failed to unload audio', err)
+            );
           }
+
+          // Switch audio mode from recording to playback (iOS)
+          await Audio.setAudioModeAsync({
+            allowsRecordingIOS: false,
+            playsInSilentModeIOS: true,
+          });
+
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: audioUri },
+            { shouldPlay: true, isLooping: false }
+          );
+          autoSoundRef.current = sound;
+
+          let finished = false;
+          const finish = () => {
+            if (finished) return;
+            finished = true;
+            if (autoPlayResolveRef.current) {
+              autoPlayResolveRef.current = null;
+            }
+            if (autoSoundRef.current === sound) {
+              autoSoundRef.current = null;
+            }
+            sound.unloadAsync().catch((err: Error) =>
+              console.warn('Failed to unload audio', err)
+            );
+            resolve();
+          };
+          autoPlayResolveRef.current = finish;
+
+          sound.setOnPlaybackStatusUpdate((status) => {
+            if (status.isLoaded && status.didJustFinish) {
+              finish();
+            }
+          });
+
+          // Safety: if playback never starts (e.g. broken URI), resolve after timeout
+          setTimeout(finish, 60000);
+        } catch (error) {
+          console.error('Audio play error:', error);
+          resolve();
         }
-      });
-    } catch (error) {
-      console.error('Audio play error:', error);
-    }
+      })();
+    });
   };
 
   // Send initial reminder message once when entering with a command
