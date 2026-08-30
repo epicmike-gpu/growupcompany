@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -27,7 +27,6 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: Date;
   audioUri?: string;
 }
 
@@ -44,7 +43,13 @@ const COMMAND_LABELS: Record<string, string> = {
 };
 
 // TTS player component for AI messages
-function TTSPlayer({ audioUri }: { audioUri: string }) {
+function TTSPlayer({
+  audioUri,
+  onBeforePlay,
+}: {
+  audioUri: string;
+  onBeforePlay?: () => void;
+}) {
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -66,6 +71,8 @@ function TTSPlayer({ audioUri }: { audioUri: string }) {
         await soundRef.current.unloadAsync();
         soundRef.current = null;
       }
+      // Stop auto-playing audio to avoid overlapping sounds
+      onBeforePlay?.();
 
       const { sound } = await Audio.Sound.createAsync(
         { uri: audioUri },
@@ -122,7 +129,8 @@ export default function ChatScreen() {
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice');
   const flatListRef = useRef<FlatList>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const autoSoundRef = useRef<Audio.Sound | null>(null);
+  const scaleAnim = useMemo(() => new Animated.Value(1), []);
 
   const commandLabel = COMMAND_LABELS[command_type] || '自由聊天';
 
@@ -135,21 +143,16 @@ export default function ChatScreen() {
   }, []);
 
   // Initial message based on command type
-  useEffect(() => {
-    if (command_type && command_type !== 'free_chat') {
-      const initialMessage = `请提醒我去${commandLabel}`;
-      handleSendMessage(initialMessage, true);
-    }
-  }, [command_type]);
+  const initialMsgSentRef = useRef(false);
+  const nextIdRef = useRef(0);
 
-  const handleSendMessage = async (text: string, isInitial = false) => {
+  const handleSendMessage = async (text: string) => {
     if (!text.trim() || isStreaming) return;
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: `u-${++nextIdRef.current}`,
       role: 'user',
       content: text,
-      timestamp: new Date(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
@@ -157,10 +160,9 @@ export default function ChatScreen() {
     setIsStreaming(true);
 
     const assistantMessage: Message = {
-      id: (Date.now() + 1).toString(),
+      id: `a-${++nextIdRef.current}`,
       role: 'assistant',
       content: '',
-      timestamp: new Date(),
     };
     setMessages((prev) => [...prev, assistantMessage]);
 
@@ -228,7 +230,6 @@ export default function ChatScreen() {
       console.error('Chat error:', error);
       Toast.show({ type: 'error', text1: '网络错误，请重试' });
       setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id));
-    } finally {
       setIsStreaming(false);
     }
   };
@@ -248,17 +249,89 @@ export default function ChatScreen() {
       });
 
       const data = await response.json();
-      if (data.success && data.audioUri) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId ? { ...m, audioUri: data.audioUri } : m
-          )
-        );
-      }
+      if (!data.success || !data.audioUri) return;
+
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId ? { ...m, audioUri: data.audioUri } : m
+        )
+      );
+
+      // Auto-play the audio
+      await playAudio(data.audioUri);
     } catch (error) {
       console.error('Auto TTS error:', error);
     }
   };
+
+  // Stop the auto-playing sound (called before manual replay)
+  const stopAutoSound = () => {
+    if (autoSoundRef.current) {
+      autoSoundRef.current.unloadAsync().catch((err: Error) =>
+        console.warn('Failed to unload audio', err)
+      );
+      autoSoundRef.current = null;
+    }
+  };
+
+  const playAudio = async (audioUri: string) => {
+    try {
+      // Stop previous audio before playing new one
+      if (autoSoundRef.current) {
+        await autoSoundRef.current.unloadAsync();
+        autoSoundRef.current = null;
+      }
+
+      // Switch audio mode from recording to playback (iOS)
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true, isLooping: false }
+      );
+      autoSoundRef.current = sound;
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync().catch((err: Error) =>
+            console.warn('Failed to unload audio', err)
+          );
+          if (autoSoundRef.current === sound) {
+            autoSoundRef.current = null;
+          }
+        }
+      });
+    } catch (error) {
+      console.error('Audio play error:', error);
+    }
+  };
+
+  // Send initial reminder message once when entering with a command
+  useEffect(() => {
+    if (
+      command_type &&
+      command_type !== 'free_chat' &&
+      !initialMsgSentRef.current
+    ) {
+      initialMsgSentRef.current = true;
+      handleSendMessage(`请提醒我去${commandLabel}`);
+    }
+  }, [command_type]);
+
+  // Cleanup auto-playing sound on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSoundRef.current) {
+        autoSoundRef.current.unloadAsync().catch((err: Error) =>
+          console.warn('Failed to unload audio', err)
+        );
+        autoSoundRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSend = () => {
     if (inputText.trim()) {
@@ -372,44 +445,41 @@ export default function ChatScreen() {
     }
   };
 
-  const renderMessage = useCallback(
-    ({ item }: { item: Message }) => {
-      const isUser = item.role === 'user';
-      return (
-        <View style={[styles.messageRow, isUser && styles.userMessageRow]}>
-          {!isUser && (
-            <View style={styles.avatarContainer}>
-              <FontAwesome6 name="star" size={14} color="#7C5CFC" solid />
-            </View>
-          )}
-          <View
+  const renderMessage = ({ item }: { item: Message }) => {
+    const isUser = item.role === 'user';
+    return (
+      <View style={[styles.messageRow, isUser && styles.userMessageRow]}>
+        {!isUser && (
+          <View style={styles.avatarContainer}>
+            <FontAwesome6 name="star" size={14} color="#7C5CFC" solid />
+          </View>
+        )}
+        <View
+          style={[
+            styles.messageBubble,
+            isUser ? styles.userBubble : styles.assistantBubble,
+          ]}
+        >
+          <Text
             style={[
-              styles.messageBubble,
-              isUser ? styles.userBubble : styles.assistantBubble,
+              styles.messageText,
+              isUser ? styles.userMessageText : styles.assistantMessageText,
             ]}
           >
-            <Text
-              style={[
-                styles.messageText,
-                isUser ? styles.userMessageText : styles.assistantMessageText,
-              ]}
-            >
-              {item.content || (isStreaming && !isUser ? '...' : '')}
-            </Text>
-            {!isUser && item.audioUri && (
-              <TTSPlayer audioUri={item.audioUri} />
-            )}
-          </View>
-          {isUser && (
-            <View style={[styles.avatarContainer, styles.userAvatar]}>
-              <FontAwesome6 name="user" size={16} color="#7C5CFC" />
-            </View>
+            {item.content || (isStreaming && !isUser ? '...' : '')}
+          </Text>
+          {!isUser && item.audioUri && (
+            <TTSPlayer audioUri={item.audioUri} onBeforePlay={stopAutoSound} />
           )}
         </View>
-      );
-    },
-    [isStreaming]
-  );
+        {isUser && (
+          <View style={[styles.avatarContainer, styles.userAvatar]}>
+            <FontAwesome6 name="user" size={16} color="#7C5CFC" />
+          </View>
+        )}
+      </View>
+    );
+  };
 
   return (
     <Screen>
