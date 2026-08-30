@@ -5,6 +5,7 @@ import profileRouter from "./routes/profile.js";
 import chatRouter from "./routes/chat.js";
 import voiceRouter from "./routes/voice.js";
 import englishRouter from "./routes/english.js";
+import authRouter from "./routes/auth.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -21,6 +22,7 @@ app.get('/api/v1/health', (_req, res) => {
 
 // Routes
 app.use('/api/v1/supabase-config', supabaseConfigRouter);
+app.use('/api/v1/auth', authRouter);
 app.use('/api/v1/profile', profileRouter);
 app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/voice', voiceRouter);

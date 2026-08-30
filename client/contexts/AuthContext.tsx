@@ -10,6 +10,7 @@ interface AuthContextType {
   isConfigReady: boolean;
   signInWithOtp: (phone: string) => Promise<{ error?: string }>;
   verifyOtp: (phone: string, token: string) => Promise<{ error?: string }>;
+  signInAsGuest: () => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -21,6 +22,7 @@ const AuthContext = createContext<AuthContextType>({
   isConfigReady: false,
   signInWithOtp: async () => ({}),
   verifyOtp: async () => ({}),
+  signInAsGuest: async () => ({}),
   signOut: async () => { return; },
 });
 
@@ -106,6 +108,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // 测试阶段专用：游客一键登录（调用后端获取真实 session）
+  const signInAsGuest = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+
+      /**
+       * 服务端文件：server/src/routes/auth.ts
+       * 接口：POST /api/v1/auth/guest
+       * Body 参数：无
+       * 返回：access_token: string, refresh_token: string
+       */
+      const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/auth/guest`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!response.ok) {
+        return { error: '游客登录失败，请稍后再试' };
+      }
+      const data = await response.json();
+
+      const { error } = await supabase.auth.setSession({
+        access_token: data.access_token,
+        refresh_token: data.refresh_token,
+      });
+      if (error) return { error: error.message };
+
+      const { data: { session: newSession } } = await supabase.auth.getSession();
+      if (newSession) {
+        setSession(newSession);
+        setUser(newSession.user);
+      }
+      return {};
+    } catch (error: any) {
+      return { error: error?.message || '游客登录失败' };
+    }
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       const supabase = getSupabaseClient();
@@ -128,6 +167,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isConfigReady,
         signInWithOtp,
         verifyOtp,
+        signInAsGuest,
         signOut,
       }}
     >

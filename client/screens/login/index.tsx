@@ -20,13 +20,14 @@ const APP_ICON = 'https://coze-coding-project.tos.coze.site/gen_project_icon/202
 const APP_NAME = '成长陪伴精灵App';
 
 export default function LoginScreen() {
-  const { signInWithOtp, verifyOtp, isAuthenticated } = useAuth();
+  const { signInWithOtp, verifyOtp, signInAsGuest, isAuthenticated } = useAuth();
   const router = useSafeRouter();
 
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
   const [phone, setPhone] = useState('');
   const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
 
   const otpRefs = useRef<(TextInput | null)[]>([]);
@@ -124,6 +125,16 @@ export default function LoginScreen() {
     await handleSendOtp();
   };
 
+  // 测试阶段专用：跳过登录，直接以游客身份进入
+  const handleSkipLogin = async () => {
+    setGuestLoading(true);
+    const result = await signInAsGuest();
+    setGuestLoading(false);
+    if (result.error) {
+      Toast.show({ type: 'error', text1: result.error });
+    }
+  };
+
   return (
     <Screen>
       <KeyboardAvoidingView
@@ -219,6 +230,19 @@ export default function LoginScreen() {
               </>
             )}
           </View>
+
+          {/* 测试阶段：跳过登录 */}
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSkipLogin}
+            disabled={guestLoading}
+          >
+            {guestLoading ? (
+              <ActivityIndicator size="small" color="#8B87A0" />
+            ) : (
+              <Text style={styles.skipButtonText}>跳过登录，直接体验（测试）</Text>
+            )}
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -310,6 +334,18 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  skipButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    marginTop: 8,
+  },
+  skipButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8B87A0',
+    textDecorationLine: 'underline',
   },
   otpTitle: {
     fontSize: 20,
