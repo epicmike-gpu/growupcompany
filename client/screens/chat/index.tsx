@@ -27,8 +27,17 @@ interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  englishText?: string;
   audioUri?: string;
+  englishAudioUri?: string;
 }
+
+// Split bilingual LLM output: Chinese part + `---EN---` separator + English part
+const splitBilingual = (raw: string): { zh: string; en: string } => {
+  const idx = raw.indexOf('---EN---');
+  if (idx === -1) return { zh: raw, en: '' };
+  return { zh: raw.slice(0, idx), en: raw.slice(idx + 8) };
+};
 
 const COMMAND_LABELS: Record<string, string> = {
   drink_water: '喝水',
@@ -127,6 +136,7 @@ export default function ChatScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [hasMicPermission, setHasMicPermission] = useState(false);
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('voice');
+  const [englishTutor, setEnglishTutor] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
   const autoSoundRef = useRef<Audio.Sound | null>(null);
@@ -184,6 +194,7 @@ export default function ChatScreen() {
           message: text,
           command_type: command_type || 'free_chat',
           history: messages.map((m) => ({ role: m.role, content: m.content })),
+          english_tutor: englishTutor,
         }),
         // @ts-ignore - RN SSE library options
         parsers: {
@@ -192,25 +203,36 @@ export default function ChatScreen() {
       });
 
       let accumulated = '';
+      let accumulatedEn = '';
 
       sse.addEventListener('message', (event: { data: string | null }) => {
         const data = event.data;
         if (data === '[DONE]') {
           sse.close();
           setIsStreaming(false);
-          // Auto-play TTS for the assistant's response
-          if (accumulated.trim()) {
-            autoPlayTTS(accumulated.trim(), assistantMessage.id);
+          // Auto-play: Chinese voice first, then English voice (English Tutor mode)
+          const zh = accumulated.trim();
+          const en = accumulatedEn.trim();
+          if (zh) {
+            autoPlayTTS(zh, assistantMessage.id, 'zh').then(() => {
+              if (en) return autoPlayTTS(en, assistantMessage.id, 'en');
+            });
           }
           return;
         }
         try {
           const parsed = JSON.parse(data || '{}');
           if (parsed.content) {
-            accumulated += parsed.content;
+            if (parsed.lang === 'en') {
+              accumulatedEn += parsed.content;
+            } else {
+              accumulated += parsed.content;
+            }
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === assistantMessage.id ? { ...m, content: accumulated } : m
+                m.id === assistantMessage.id
+                  ? { ...m, content: accumulated, englishText: accumulatedEn || undefined }
+                  : m
               )
             );
           }
@@ -234,10 +256,14 @@ export default function ChatScreen() {
     }
   };
 
-  const autoPlayTTS = async (text: string, messageId: string) => {
+  const autoPlayTTS = async (
+    text: string,
+    messageId: string,
+    lang: 'zh' | 'en' = 'zh'
+  ): Promise<string | undefined> => {
     try {
       const token = session?.access_token;
-      if (!token) return;
+      if (!token) return undefined;
 
       const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/voice/tts`, {
         method: 'POST',
@@ -245,22 +271,31 @@ export default function ChatScreen() {
           'Content-Type': 'application/json',
           'x-session': token,
         },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({
+          text,
+          speaker: lang === 'en' ? 'en_female_amber_rosetts' : undefined,
+        }),
       });
 
       const data = await response.json();
-      if (!data.success || !data.audioUri) return;
+      if (!data.success || !data.audioUri) return undefined;
 
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === messageId ? { ...m, audioUri: data.audioUri } : m
+          m.id === messageId
+            ? lang === 'en'
+              ? { ...m, englishAudioUri: data.audioUri }
+              : { ...m, audioUri: data.audioUri }
+            : m
         )
       );
 
       // Auto-play the audio
       await playAudio(data.audioUri);
+      return data.audioUri;
     } catch (error) {
       console.error('Auto TTS error:', error);
+      return undefined;
     }
   };
 
@@ -468,6 +503,18 @@ export default function ChatScreen() {
           >
             {item.content || (isStreaming && !isUser ? '...' : '')}
           </Text>
+          {!isUser && item.englishText ? (
+            <View style={styles.englishSection}>
+              <View style={styles.englishBadge}>
+                <FontAwesome6 name="earth-asia" size={9} color="#F472B6" solid />
+                <Text style={styles.englishBadgeText}>English</Text>
+              </View>
+              <Text style={styles.englishMessageText}>{item.englishText}</Text>
+              {item.englishAudioUri && (
+                <TTSPlayer audioUri={item.englishAudioUri} onBeforePlay={stopAutoSound} />
+              )}
+            </View>
+          ) : null}
           {!isUser && item.audioUri && (
             <TTSPlayer audioUri={item.audioUri} onBeforePlay={stopAutoSound} />
           )}
@@ -499,6 +546,30 @@ export default function ChatScreen() {
               <Text style={styles.headerSubtitle}>{commandLabel}</Text>
             </View>
           </View>
+          {/* English Tutor toggle */}
+          <TouchableOpacity
+            style={[
+              styles.tutorToggle,
+              englishTutor && styles.tutorToggleActive,
+            ]}
+            onPress={() => setEnglishTutor((v) => !v)}
+            activeOpacity={0.8}
+          >
+            <FontAwesome6
+              name="earth-asia"
+              size={13}
+              color={englishTutor ? '#FFFFFF' : '#7C5CFC'}
+              solid
+            />
+            <Text
+              style={[
+                styles.tutorToggleText,
+                englishTutor && styles.tutorToggleTextActive,
+              ]}
+            >
+              English Tutor
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Messages */}
@@ -606,6 +677,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#EDE8FF',
   },
   headerLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
@@ -630,6 +702,62 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#8B87A0',
     marginTop: 2,
+  },
+  tutorToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F1EEFF',
+    borderWidth: 1.5,
+    borderColor: '#7C5CFC',
+  },
+  tutorToggleActive: {
+    backgroundColor: '#7C5CFC',
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  tutorToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#7C5CFC',
+  },
+  tutorToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  englishSection: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(124,92,252,0.12)',
+    gap: 6,
+  },
+  englishBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    backgroundColor: 'rgba(244,114,182,0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  englishBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#F472B6',
+    letterSpacing: 0.5,
+  },
+  englishMessageText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#5B5770',
+    fontWeight: '500',
   },
   messagesList: {
     flex: 1,

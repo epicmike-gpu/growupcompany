@@ -81,6 +81,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
     const { message, command_type, age, history } = req.body;
+    // 兼容 camelCase 和 snake_case 两种命名
+    const englishTutor = req.body.englishTutor === true || req.body.english_tutor === true;
 
     if (!message || !command_type) {
       res.status(400).json({ error: '缺少必要参数' });
@@ -118,7 +120,17 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     // Build system prompt based on age and command type
     const basePrompt = COMMAND_PROMPTS[command_type] || COMMAND_PROMPTS['free_chat'];
     const agePrompt = `小朋友的年龄是${userAge}岁，请根据这个年龄调整语言的复杂程度，确保${userAge}岁的小朋友能完全理解。`;
-    const systemPrompt = `${basePrompt}\n\n${agePrompt}`;
+    let systemPrompt = `${basePrompt}\n\n${agePrompt}`;
+
+    // English Tutor mode: reply in Chinese first, then repeat in simple English
+    const englishTutorEnabled = englishTutor === true;
+    if (englishTutorEnabled) {
+      systemPrompt += `\n\n【English Tutor 模式】你的回复必须严格按照以下格式输出：
+1. 先用中文回复（2-4句话，符合小朋友年龄的活泼语言）。
+2. 然后单独输出一行分隔符：---EN---
+3. 分隔符之后，用非常简单的英语再说一遍同样的意思（2-4句话，使用${userAge <= 5 ? '最基础' : '简单'}的英语单词和短句，适合${userAge}岁小朋友听懂）。
+注意：分隔符 ---EN--- 必须单独成行，不要在分隔符前后加其他文字。`;
+    }
 
     // Set up SSE
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -149,20 +161,57 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     });
 
     let fullResponse = '';
+    let currentLang: 'zh' | 'en' = 'zh';
+    let pendingBuffer = '';
+
+    // Parse the ---EN--- separator and emit language-tagged chunks
+    const emitChunk = (text: string, lang: 'zh' | 'en') => {
+      if (text) {
+        res.write(`data: ${JSON.stringify({ content: text, lang })}\n\n`);
+      }
+    };
 
     for await (const chunk of stream) {
       if (chunk.content) {
         const text = chunk.content.toString();
         fullResponse += text;
-        res.write(`data: ${JSON.stringify({ content: text })}\n\n`);
+
+        if (!englishTutorEnabled) {
+          emitChunk(text, 'zh');
+          continue;
+        }
+
+        pendingBuffer += text;
+        while (true) {
+          const idx = pendingBuffer.indexOf('---EN---');
+          if (idx === -1) {
+            // No full separator yet; flush safe portion (keep last 8 chars in case separator is split across chunks)
+            if (pendingBuffer.length > 8) {
+              const safeText = pendingBuffer.slice(0, pendingBuffer.length - 8);
+              pendingBuffer = pendingBuffer.slice(pendingBuffer.length - 8);
+              emitChunk(safeText, currentLang);
+            }
+            break;
+          }
+          // Emit text before the separator, then switch language
+          emitChunk(pendingBuffer.slice(0, idx), currentLang);
+          currentLang = 'en';
+          pendingBuffer = pendingBuffer.slice(idx + 8);
+        }
       }
     }
 
-    // Save assistant message
+    // Flush remaining buffer
+    if (englishTutorEnabled && pendingBuffer) {
+      emitChunk(pendingBuffer, currentLang);
+    }
+
+    // Save assistant message (strip separator for storage)
+    const storedContent = fullResponse.replace(/---EN---/g, '\n\n');
     await supabaseClient.from('chat_messages').insert({
       user_id: userId,
       role: 'assistant',
-      content: fullResponse,
+      content: storedContent,
       command_type,
     });
 
