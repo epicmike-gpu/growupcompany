@@ -143,6 +143,8 @@ export default function ChatScreen() {
   // Resolves the pending auto-play chain when audio is manually stopped
   const autoPlayResolveRef = useRef<(() => void) | null>(null);
   const autoPlayCancelledRef = useRef(false);
+  // Typewriter interval for showing English text
+  const autoTypeIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scaleAnim = useMemo(() => new Animated.Value(1), []);
 
   const commandLabel = COMMAND_LABELS[command_type] || '自由聊天';
@@ -215,16 +217,21 @@ export default function ChatScreen() {
           setIsStreaming(false);
           // Reset the cancel flag so the new auto-play chain is allowed to run
           autoPlayCancelledRef.current = false;
-          // Auto-play: Chinese voice first, then English voice (English Tutor mode)
+          // Sequential flow (English Tutor mode):
+          //   Chinese text (already streamed) -> play Chinese voice
+          //   -> typewriter English text -> play English voice
           const zh = accumulated.trim();
           const en = accumulatedEn.trim();
-          if (zh) {
-            autoPlayTTS(zh, assistantMessage.id, 'zh').then(() => {
-              if (en && !autoPlayCancelledRef.current) {
-                return autoPlayTTS(en, assistantMessage.id, 'en');
-              }
-            });
-          }
+          const chain = (async () => {
+            if (zh) {
+              await autoPlayTTS(zh, assistantMessage.id, 'zh');
+            }
+            if (!en || autoPlayCancelledRef.current) return;
+            await typeEnglishText(assistantMessage.id, en);
+            if (autoPlayCancelledRef.current) return;
+            await autoPlayTTS(en, assistantMessage.id, 'en');
+          })();
+          chain.catch((err) => console.warn('自动播放链中断:', err));
           return;
         }
         try {
@@ -232,13 +239,15 @@ export default function ChatScreen() {
           if (parsed.content) {
             if (parsed.lang === 'en') {
               accumulatedEn += parsed.content;
+              // English text is NOT shown in realtime;
+              // it will be revealed by typewriter AFTER the Chinese voice finishes.
             } else {
               accumulated += parsed.content;
             }
             setMessages((prev) =>
               prev.map((m) =>
                 m.id === assistantMessage.id
-                  ? { ...m, content: accumulated, englishText: accumulatedEn || undefined }
+                  ? { ...m, content: accumulated }
                   : m
               )
             );
@@ -303,13 +312,18 @@ export default function ChatScreen() {
     }
   };
 
-  // Stop the auto-playing sound (called before manual replay)
+  // Stop the auto-playing sound and any pending text typewriter
+  // (called when a manual action interrupts the auto-play chain)
   const stopAutoSound = () => {
     if (autoSoundRef.current) {
       autoSoundRef.current.unloadAsync().catch((err: Error) =>
         console.warn('Failed to unload audio', err)
       );
       autoSoundRef.current = null;
+    }
+    if (autoTypeIntervalRef.current) {
+      clearInterval(autoTypeIntervalRef.current);
+      autoTypeIntervalRef.current = null;
     }
     // If an auto-play chain is pending (e.g. waiting for Chinese to finish
     // before playing English), resolve it immediately so the chain moves on
@@ -323,6 +337,29 @@ export default function ChatScreen() {
 
   const playAudio = (audioUri: string): Promise<void> => {
     return new Promise((resolve) => {
+      let finished = false;
+      let poll: ReturnType<typeof setInterval> | null = null;
+      let sound: Audio.Sound | null = null;
+
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        if (poll) {
+          clearInterval(poll);
+          poll = null;
+        }
+        if (autoPlayResolveRef.current) {
+          autoPlayResolveRef.current = null;
+        }
+        if (sound && autoSoundRef.current === sound) {
+          autoSoundRef.current = null;
+          sound.unloadAsync().catch((err: Error) =>
+            console.warn('Failed to unload audio', err)
+          );
+        }
+        resolve();
+      };
+
       (async () => {
         try {
           // Stop previous audio before playing new one
@@ -340,34 +377,46 @@ export default function ChatScreen() {
             playsInSilentModeIOS: true,
           });
 
-          const { sound } = await Audio.Sound.createAsync(
+          const { sound: created } = await Audio.Sound.createAsync(
             { uri: audioUri },
-            { shouldPlay: true, isLooping: false }
+            { isLooping: false }
           );
+          sound = created;
           autoSoundRef.current = sound;
-
-          let finished = false;
-          const finish = () => {
-            if (finished) return;
-            finished = true;
-            if (autoPlayResolveRef.current) {
-              autoPlayResolveRef.current = null;
-            }
-            if (autoSoundRef.current === sound) {
-              autoSoundRef.current = null;
-            }
-            sound.unloadAsync().catch((err: Error) =>
-              console.warn('Failed to unload audio', err)
-            );
-            resolve();
-          };
           autoPlayResolveRef.current = finish;
 
+          // Register listener BEFORE playback starts (short audio may finish
+          // before a late listener would receive didJustFinish)
           sound.setOnPlaybackStatusUpdate((status) => {
             if (status.isLoaded && status.didJustFinish) {
               finish();
             }
           });
+          await sound.playAsync();
+
+          // Polling fallback in case didJustFinish never fires on some devices
+          poll = setInterval(() => {
+            sound
+              ?.getStatusAsync()
+              .then((st) => {
+                if (!st.isLoaded) {
+                  finish();
+                  return;
+                }
+                if (st.didJustFinish) {
+                  finish();
+                  return;
+                }
+                if (
+                  st.durationMillis &&
+                  st.durationMillis > 0 &&
+                  st.positionMillis >= st.durationMillis - 120
+                ) {
+                  finish();
+                }
+              })
+              .catch(() => finish());
+          }, 300);
 
           // Safety: if playback never starts (e.g. broken URI), resolve after timeout
           setTimeout(finish, 60000);
@@ -376,6 +425,40 @@ export default function ChatScreen() {
           resolve();
         }
       })();
+    });
+  };
+
+  // Typewriter effect: reveal English text progressively (sequential flow:
+  // Chinese voice finishes -> English text types out -> English voice plays)
+  const typeEnglishText = (messageId: string, text: string): Promise<void> => {
+    return new Promise((resolve) => {
+      let index = 0;
+      const timer = setInterval(() => {
+        // Bail out if the chain was cancelled mid-typing
+        if (autoPlayCancelledRef.current) {
+          clearInterval(timer);
+          autoTypeIntervalRef.current = null;
+          // Still show the full text so nothing is lost
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === messageId ? { ...m, englishText: text } : m
+            )
+          );
+          resolve();
+          return;
+        }
+        index = Math.min(index + 2, text.length);
+        const slice = text.slice(0, index);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, englishText: slice } : m))
+        );
+        if (index >= text.length) {
+          clearInterval(timer);
+          autoTypeIntervalRef.current = null;
+          resolve();
+        }
+      }, 45);
+      autoTypeIntervalRef.current = timer;
     });
   };
 
@@ -466,6 +549,12 @@ export default function ChatScreen() {
       const uri = recordingRef.current.getURI();
       recordingRef.current = null;
       setIsRecording(false);
+
+      // 立即切回播放模式，否则 iOS 上录音模式会导致后续语音播放静音
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        playsInSilentModeIOS: true,
+      });
 
       if (uri) {
         await sendVoiceMessage(uri);
