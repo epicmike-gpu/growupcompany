@@ -50,8 +50,8 @@ const AGES = [3, 4, 5, 6, 7, 8, 9, 10];
  */
 function OrbitStar() {
   const angle = useSharedValue(0);
-  const radius = useSharedValue(58);
-  const squash = useSharedValue(0.42);
+  const radius = useSharedValue(62);
+  const squash = useSharedValue(0.62);
   const spin = useSharedValue(0);
   const seeded = useRef(false);
   const nextMorph = useRef(Math.PI * 1.5);
@@ -62,9 +62,9 @@ function OrbitStar() {
     seeded.current = true;
     angle.value = Math.random() * Math.PI * 2;
     const d = dyn.current;
-    d.tR = 46 + Math.random() * 26;
+    d.tR = 56 + Math.random() * 26;
     d.tSpeed = 0.5 + Math.random() * 0.7;
-    d.tSq = 0.32 + Math.random() * 0.2;
+    d.tSq = 0.62 + Math.random() * 0.16;
     nextMorph.current = angle.value + Math.PI * (1.5 + Math.random() * 1.2);
   }, [angle]);
 
@@ -86,9 +86,9 @@ function OrbitStar() {
       const d = dyn.current;
       if (angle.value > nextMorph.current) {
         nextMorph.current += Math.PI * (1.5 + Math.random() * 1.2);
-        d.tR = 46 + Math.random() * 26;
+        d.tR = 56 + Math.random() * 26;
         d.tSpeed = 0.5 + Math.random() * 0.7;
-        d.tSq = 0.32 + Math.random() * 0.2;
+        d.tSq = 0.62 + Math.random() * 0.16;
       }
       const k = Math.min(1, dt * 1.4);
       d.R += (d.tR - d.R) * k;
@@ -452,13 +452,14 @@ const styles = StyleSheet.create({
     height: 80,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 10,
   },
   orbitLayer: {
     position: 'absolute',
-    width: 230,
-    height: 190,
-    left: -75,
-    top: -55,
+    width: 290,
+    height: 250,
+    left: -105,
+    top: -85,
     alignItems: 'center',
     justifyContent: 'center',
   },
