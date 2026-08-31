@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,13 @@ import {
   ActivityIndicator,
   TextInput,
 } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import { useAuth } from '@/contexts/AuthContext';
@@ -72,6 +79,33 @@ interface LibraryData {
 }
 
 const LEARN_CARD = { label: '学英语', icon: 'graduation-cap', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' };
+
+/** 3D 持续旋转的精灵星星：绕 Y 轴匀速翻转，带透视立体感 */
+function SpinningSprite({ size = 36 }: { size?: number }) {
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    rotation.value = withRepeat(
+      withTiming(360, { duration: 3600, easing: Easing.linear }),
+      -1,
+      false
+    );
+  }, [rotation]);
+
+  const spriteStyle = useAnimatedStyle(() => ({
+    transform: [
+      { perspective: 900 },
+      // rotation.value 是纯数字，先拼接单位字符串再用于 transform（避免 SharedValue 直接拼字符串）
+      { rotateY: `${rotation.value}deg` },
+    ],
+  }));
+
+  return (
+    <Animated.View style={spriteStyle}>
+      <FontAwesome6 name="star" size={size} color="#FFFFFF" solid />
+    </Animated.View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useSafeRouter();
@@ -200,7 +234,7 @@ export default function HomeScreen() {
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <View style={styles.heroIconContainer}>
-            <FontAwesome6 name="star" size={36} color="#FFFFFF" solid />
+            <SpinningSprite size={36} />
           </View>
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
