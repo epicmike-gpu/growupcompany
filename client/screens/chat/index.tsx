@@ -787,14 +787,20 @@ export default function ChatScreen() {
             isUser ? styles.userBubble : styles.assistantBubble,
           ]}
         >
-          <Text
-            style={[
-              styles.messageText,
-              isUser ? styles.userMessageText : styles.assistantMessageText,
-            ]}
-          >
-            {item.content || (isStreaming && !isUser ? '...' : '')}
-          </Text>
+          {/* 中文文本与 TTS 按钮同行；英文区块独立一行，避免横向挤压 */}
+          <View style={styles.messageMainRow}>
+            <Text
+              style={[
+                styles.messageText,
+                isUser ? styles.userMessageText : styles.assistantMessageText,
+              ]}
+            >
+              {item.content || (isStreaming && !isUser ? '...' : '')}
+            </Text>
+            {!isUser && item.audioUri && (
+              <TTSPlayer audioUri={item.audioUri} onBeforePlay={stopAutoSound} />
+            )}
+          </View>
           {!isUser && item.englishText ? (
             <View style={styles.englishSection}>
               <View style={styles.englishBadge}>
@@ -807,9 +813,6 @@ export default function ChatScreen() {
               )}
             </View>
           ) : null}
-          {!isUser && item.audioUri && (
-            <TTSPlayer audioUri={item.audioUri} onBeforePlay={stopAutoSound} />
-          )}
         </View>
         {isUser && (
           <View style={[styles.avatarContainer, styles.userAvatar]}>
@@ -1148,11 +1151,18 @@ const styles = StyleSheet.create({
   assistantBubble: {
     backgroundColor: '#FFFFFF',
     borderBottomLeftRadius: 6,
+    flexDirection: 'column',
+    alignItems: 'stretch',
     shadowColor: '#7C5CFC',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 3,
+  },
+  messageMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   messageText: {
     fontSize: 15,
