@@ -69,7 +69,13 @@ export default function HomeScreen() {
 
   const handleCommand = (commandType: string) => {
     // commandId: 唯一标识本次指令进入，聊天页据此判断是否需要发送初始指令消息
-    router.push('/chat', { command_type: commandType, commandId: Date.now() });
+    const payload = { command_type: commandType, commandId: Date.now() };
+    // navigate 到 tab 内页面语义更正确；冷启动后导航树刚就绪的瞬间 push 事件可能被丢弃，
+    // 延迟重试一次兜底（两次携带相同 commandId，聊天页不会重复发送指令）
+    router.navigate('/chat', payload);
+    setTimeout(() => {
+      router.navigate('/chat', payload);
+    }, 250);
   };
 
   if (loading) {
