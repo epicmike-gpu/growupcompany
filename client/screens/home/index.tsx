@@ -7,7 +7,9 @@ import {
   StyleSheet,
   ActivityIndicator,
   TextInput,
+  Platform,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -234,7 +236,20 @@ export default function HomeScreen() {
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <View style={styles.heroIconContainer}>
-            <SpinningSprite size={36} />
+            {/* 玻璃球：真实磨砂模糊层（模糊其后方 hero 渐变） */}
+            <BlurView
+              intensity={30}
+              tint="light"
+              experimentalBlurMethod={
+                Platform.OS === 'android' ? 'dimezisBlurView' : undefined
+              }
+              style={StyleSheet.absoluteFill}
+            />
+            {/* 玻璃体色层：白雾填充 */}
+            <View style={styles.glassBallTint} pointerEvents="none" />
+            {/* 左上高光：模拟玻璃球反光 */}
+            <View style={styles.glassBallHighlight} pointerEvents="none" />
+            <SpinningSprite size={34} />
           </View>
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
@@ -516,10 +531,26 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 8,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  glassBallTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  glassBallHighlight: {
+    position: 'absolute',
+    top: 4,
+    left: 7,
+    width: 20,
+    height: 10,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    transform: [{ rotate: '-24deg' }],
   },
   heroTitle: {
     fontSize: 22,
