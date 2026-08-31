@@ -106,18 +106,22 @@ function OrbitStar() {
   const orbitStyle = useAnimatedStyle(() => {
     const a = angle.value;
     const depth = Math.sin(a);
-    const t = (depth + 1) / 2;
     return {
       transform: [
         { translateX: radius.value * Math.cos(a) },
         { translateY: radius.value * squash.value * Math.sin(a) },
-        { scale: 0.68 + 0.32 * t },
       ],
-      // 注意：此处不可加动态 opacity/elevation——
-      // iOS 上 opacity<1 作用于含 BlurView 的层会截断渲染，
-      // Android 上 elevation 动态切换会打乱含模糊层的绘制
+      // 注意：此层内含 BlurView，只能做 translate——
+      // 动态 scale/opacity 作用于含 effect view 的层会触发渲染截断（星星显示一半）
       zIndex: depth > 0 ? 3 : 0,
     };
+  });
+
+  // 深度缩放只作用于星星（纯图标，无 effect view，可安全缩放）
+  const starDepthStyle = useAnimatedStyle(() => {
+    const depth = Math.sin(angle.value);
+    const t = (depth + 1) / 2;
+    return { transform: [{ scale: 0.68 + 0.32 * t }] };
   });
 
   const spinStyle = useAnimatedStyle(() => ({
@@ -136,7 +140,7 @@ function OrbitStar() {
         <View style={styles.orbitGlassHighlight} pointerEvents="none" />
       </View>
       <View style={styles.orbitStarWrap}>
-        <Animated.View style={spinStyle}>
+        <Animated.View style={[spinStyle, starDepthStyle]}>
           <FontAwesome6 name="star" size={16} color="#FFD24C" solid />
         </Animated.View>
       </View>
