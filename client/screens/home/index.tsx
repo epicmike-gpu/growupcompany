@@ -236,20 +236,25 @@ export default function HomeScreen() {
         {/* Hero Card */}
         <View style={styles.heroCard}>
           <View style={styles.heroIconContainer}>
-            {/* 玻璃球：真实磨砂模糊层（模糊其后方 hero 渐变） */}
-            <BlurView
-              intensity={30}
-              tint="light"
-              experimentalBlurMethod={
-                Platform.OS === 'android' ? 'dimezisBlurView' : undefined
-              }
-              style={StyleSheet.absoluteFill}
-            />
-            {/* 玻璃体色层：白雾填充 */}
-            <View style={styles.glassBallTint} pointerEvents="none" />
-            {/* 左上高光：模拟玻璃球反光 */}
-            <View style={styles.glassBallHighlight} pointerEvents="none" />
-            <SpinningSprite size={34} />
+            {/* 玻璃球体：独立裁剪层（真实磨砂模糊 + 白雾 + 高光），星星不放进裁剪层，
+                避免 iOS BlurView 与 3D transform 的渲染冲突导致星星被截断 */}
+            <View style={styles.glassBall}>
+              <BlurView
+                intensity={30}
+                tint="light"
+                experimentalBlurMethod={
+                  Platform.OS === 'android' ? 'dimezisBlurView' : undefined
+                }
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+              <View style={styles.glassBallTint} pointerEvents="none" />
+              <View style={styles.glassBallHighlight} pointerEvents="none" />
+            </View>
+            {/* 星星悬浮在玻璃球面上，位于裁剪层之上 */}
+            <View style={styles.heroIconCenter} pointerEvents="none">
+              <SpinningSprite size={34} />
+            </View>
           </View>
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
@@ -530,13 +535,19 @@ const styles = StyleSheet.create({
   heroIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
     marginBottom: 8,
+  },
+  glassBall: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.5)',
+  },
+  heroIconCenter: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   glassBallTint: {
     ...StyleSheet.absoluteFillObject,
