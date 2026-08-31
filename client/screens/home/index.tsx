@@ -68,7 +68,8 @@ export default function HomeScreen() {
   );
 
   const handleCommand = (commandType: string) => {
-    router.push('/chat', { command_type: commandType });
+    // commandId: 唯一标识本次指令进入，聊天页据此判断是否需要发送初始指令消息
+    router.push('/chat', { command_type: commandType, commandId: Date.now() });
   };
 
   if (loading) {

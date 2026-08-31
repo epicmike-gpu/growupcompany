@@ -129,7 +129,7 @@ function TTSPlayer({
 
 export default function ChatScreen() {
   const { session } = useAuth();
-  const { command_type } = useSafeSearchParams<{ command_type: string }>();
+  const { command_type, commandId } = useSafeSearchParams<{ command_type: string; commandId?: number }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -158,10 +158,12 @@ export default function ChatScreen() {
   }, []);
 
   // Initial message based on command type
-  const initialMsgSentRef = useRef(false);
+  // Tabs 导航下聊天页不会卸载，必须用"每次进入的唯一 commandId"判断是否发送，
+  // 而不是一次性 boolean ref（否则第二次从首页点指令进来不会再发送）
+  const lastSentCommandIdRef = useRef<number | null>(null);
   const nextIdRef = useRef(0);
 
-  const handleSendMessage = async (text: string) => {
+  const handleSendMessage = async (text: string, msgCommandType?: string) => {
     if (!text.trim() || isStreaming) return;
 
     const userMessage: Message = {
@@ -197,7 +199,9 @@ export default function ChatScreen() {
         },
         body: JSON.stringify({
           message: text,
-          command_type: command_type || 'free_chat',
+          // 指令类型跟随消息本身：进入页面时的首条指令用页面的 command_type，
+          // 之后的对话消息一律按 free_chat 处理，话题靠 history 延续
+          command_type: msgCommandType || 'free_chat',
           history: messages.map((m) => ({ role: m.role, content: m.content })),
           english_tutor: englishTutor,
         }),
@@ -476,17 +480,17 @@ export default function ChatScreen() {
     });
   };
 
-  // Send initial reminder message once when entering with a command
+  // Send initial reminder message when entering with a command
+  // Tabs 导航下聊天页不会卸载，必须用"每次进入的唯一 commandId"判断是否发送，
+  // 而不是一次性 boolean ref（否则第二次从首页点指令进来不会再发送）
   useEffect(() => {
-    if (
-      command_type &&
-      command_type !== 'free_chat' &&
-      !initialMsgSentRef.current
-    ) {
-      initialMsgSentRef.current = true;
-      handleSendMessage(`请提醒我去${commandLabel}`);
-    }
-  }, [command_type]);
+    if (!command_type || command_type === 'free_chat') return;
+    if (typeof commandId !== 'number') return;
+    if (lastSentCommandIdRef.current === commandId) return;
+    lastSentCommandIdRef.current = commandId;
+    handleSendMessage(`请提醒我去${commandLabel}`, command_type);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [commandId]);
 
   // Cleanup auto-playing sound on unmount
   useEffect(() => {
