@@ -259,7 +259,7 @@ export default function ProfileScreen() {
 
           {/* Water Reminder */}
           <View style={styles.settingItem}>
-            <View style={styles.settingLeft}>
+            <View style={[styles.settingLeft, { flex: 1 }]}>
               <View style={[styles.settingIcon, { backgroundColor: '#E0F2FE' }]}>
                 <FontAwesome6 name="droplet" size={18} color="#0284C7" solid />
               </View>
