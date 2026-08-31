@@ -12,6 +12,7 @@ import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
+import { useSafeRouter } from '@/hooks/useSafeRouter';
 
 const EXPO_PUBLIC_BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
 
@@ -26,6 +27,7 @@ interface UserProfile {
 const AGES = [3, 4, 5, 6, 7, 8, 9, 10];
 
 export default function ProfileScreen() {
+  const router = useSafeRouter();
   const { session, signOut } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,43 +86,6 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleUpgrade = () => {
-    Alert.alert(
-      '升级会员',
-      '成为会员后，你可以无限次使用成长精灵的所有功能！\n\n会员价格：¥19.9/月\n\n（此为演示，暂不支持实际支付）',
-      [
-        { text: '取消', style: 'cancel' },
-        {
-          text: '确认升级',
-          onPress: async () => {
-            try {
-              const token = session?.access_token;
-              if (!token) return;
-
-              /**
-               * 服务端文件：server/src/routes/profile.ts
-               * 接口：POST /api/v1/profile/subscribe
-               * Body 参数：无
-               */
-              const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/profile/subscribe`, {
-                method: 'POST',
-                headers: { 'x-session': token },
-              });
-
-              if (response.ok) {
-                setProfile((prev) =>
-                  prev ? { ...prev, subscription_type: 'premium' } : prev
-                );
-                Alert.alert('升级成功', '恭喜你成为会员！现在可以无限次使用所有功能啦！');
-              }
-            } catch (error) {
-              console.error('Subscribe error:', error);
-            }
-          },
-        },
-      ]
-    );
-  };
 
   const handleSignOut = () => {
     Alert.alert('退出登录', '确定要退出登录吗？', [
@@ -230,7 +195,7 @@ export default function ProfileScreen() {
 
           {/* Subscription */}
           {!isPremium && (
-            <TouchableOpacity style={styles.settingItem} onPress={handleUpgrade}>
+            <TouchableOpacity style={styles.settingItem} onPress={() => router.push('/paywall')}>
               <View style={styles.settingLeft}>
                 <View style={[styles.settingIcon, { backgroundColor: '#FFF4DD' }]}>
                   <FontAwesome6 name="crown" size={18} color="#FFCB57" solid />
@@ -238,7 +203,7 @@ export default function ProfileScreen() {
                 <Text style={styles.settingLabel}>升级会员</Text>
               </View>
               <View style={styles.settingRight}>
-                <Text style={styles.settingValue}>¥19.9/月</Text>
+                <Text style={styles.settingValue}>¥19.9/100次</Text>
                 <FontAwesome6 name="chevron-right" size={14} color="#8B87A0" />
               </View>
             </TouchableOpacity>

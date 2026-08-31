@@ -309,7 +309,7 @@ export default function ChatScreen() {
         if ((event as { status?: number })?.status === 403) {
           Alert.alert('次数已用完', '聊天次数已经用完啦，请充值后继续和小精灵聊天哦', [
             { text: '知道了', style: 'cancel' },
-            { text: '去充值', onPress: () => router.navigate('/profile') },
+            { text: '去充值', onPress: () => router.navigate('/paywall') },
           ]);
         }
       });

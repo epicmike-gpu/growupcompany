@@ -211,7 +211,7 @@ export default function HomeScreen() {
           <TouchableOpacity
             style={styles.quotaBanner}
             activeOpacity={0.8}
-            onPress={() => router.navigate('/profile')}
+            onPress={() => router.navigate('/paywall')}
           >
             <FontAwesome6 name="circle-exclamation" size={16} color="#FFF" solid />
             <Text style={styles.quotaBannerText}>聊天次数已经用完啦，请充值后再继续</Text>

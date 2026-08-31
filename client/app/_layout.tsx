@@ -28,6 +28,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ title: "" }} />
           <Stack.Screen name="login" options={{ title: "" }} />
           <Stack.Screen name="english" options={{ title: "" }} />
+          <Stack.Screen name="paywall" options={{ title: "" }} />
         </Stack>
         <Toast />
       </AuthProvider>

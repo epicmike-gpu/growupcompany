@@ -7,6 +7,7 @@ import voiceRouter from "./routes/voice.js";
 import englishRouter from "./routes/english.js";
 import authRouter from "./routes/auth.js";
 import tasksRouter from "./routes/tasks.js";
+import billingRouter from "./routes/billing.js";
 
 const app = express();
 const port = process.env.PORT || 9091;
@@ -29,6 +30,7 @@ app.use('/api/v1/chat', chatRouter);
 app.use('/api/v1/voice', voiceRouter);
 app.use('/api/v1/english', englishRouter);
 app.use('/api/v1/tasks', tasksRouter);
+app.use('/api/v1/billing', billingRouter);
 
 app.listen(port, () => {
   console.log(`Server listening at http://localhost:${port}/`);
