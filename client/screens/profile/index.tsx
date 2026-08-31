@@ -285,7 +285,7 @@ export default function ProfileScreen() {
                 <View style={[styles.settingIcon, { backgroundColor: '#FFF4DD' }]}>
                   <FontAwesome6 name="crown" size={18} color="#FFCB57" solid />
                 </View>
-                <Text style={styles.settingLabel}>升级会员</Text>
+                <Text style={styles.settingLabel}>充值次数</Text>
               </View>
               <View style={styles.settingRight}>
                 <Text style={styles.settingValue}>¥9.9 起</Text>
