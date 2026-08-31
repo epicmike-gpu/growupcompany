@@ -106,7 +106,7 @@ function SpinningSprite({ size = 36 }: { size?: number }) {
 
   return (
     <Animated.View style={spriteStyle}>
-      <FontAwesome6 name="star" size={size} color="#FFFFFF" solid />
+      <FontAwesome6 name="star" size={size} color="#FFD24C" solid />
     </Animated.View>
   );
 }
@@ -328,30 +328,33 @@ export default function HomeScreen() {
               starHome.current = { x, y };
             }}
           >
-            {/* 玻璃球体：独立裁剪层（真实磨砂模糊 + 白雾 + 高光），星星不放进裁剪层，
-                避免 iOS BlurView 与 3D transform 的渲染冲突导致星星被截断 */}
-            <View style={styles.glassBall}>
-              <BlurView
-                intensity={30}
-                tint="light"
-                experimentalBlurMethod={
-                  Platform.OS === 'android' ? 'dimezisBlurView' : undefined
-                }
-                style={StyleSheet.absoluteFill}
-                pointerEvents="none"
-              />
-              <View style={styles.glassBallTint} pointerEvents="none" />
-              <View style={styles.glassBallHighlight} pointerEvents="none" />
-            </View>
-            {/* 星星悬浮在玻璃球面上，位于裁剪层之上；点击后飞出弹跳 */}
-            <Animated.View style={[styles.heroIconCenter, starFlyStyle]}>
-              <TouchableOpacity
-                activeOpacity={0.75}
-                onPress={startStarBounce}
-                accessibilityLabel="弹跳的星星"
-              >
-                <SpinningSprite size={34} />
-              </TouchableOpacity>
+            {/* 移动层：玻璃球与星星作为一个整体弹跳 */}
+            <Animated.View style={[styles.heroIconMover, starFlyStyle]}>
+              {/* 玻璃球体：独立裁剪层（真实磨砂模糊 + 白雾 + 高光），星星不放进裁剪层，
+                  避免 iOS BlurView 与 3D transform 的渲染冲突导致星星被截断 */}
+              <View style={styles.glassBall}>
+                <BlurView
+                  intensity={30}
+                  tint="light"
+                  experimentalBlurMethod={
+                    Platform.OS === 'android' ? 'dimezisBlurView' : undefined
+                  }
+                  style={StyleSheet.absoluteFill}
+                  pointerEvents="none"
+                />
+                <View style={styles.glassBallTint} pointerEvents="none" />
+                <View style={styles.glassBallHighlight} pointerEvents="none" />
+              </View>
+              {/* 星星悬浮在玻璃球面上，位于裁剪层之上；点击后带着玻璃球一起飞出弹跳 */}
+              <View style={styles.heroIconCenter}>
+                <TouchableOpacity
+                  activeOpacity={0.75}
+                  onPress={startStarBounce}
+                  accessibilityLabel="弹跳的星星"
+                >
+                  <SpinningSprite size={34} />
+                </TouchableOpacity>
+              </View>
             </Animated.View>
           </View>
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
@@ -642,6 +645,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.5)',
+  },
+  heroIconMover: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
   heroIconCenter: {
     ...StyleSheet.absoluteFillObject,
