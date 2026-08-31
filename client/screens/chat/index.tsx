@@ -14,6 +14,7 @@ import {
   Animated,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
+import { GlassStarBall } from '@/components/GlassStarBall';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { useFocusEffect } from 'expo-router';
@@ -829,9 +830,7 @@ export default function ChatScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-            <View style={styles.headerAvatar}>
-              <FontAwesome6 name="star" size={18} color="#7C5CFC" solid />
-            </View>
+            <GlassStarBall size={40} />
             <View>
               <Text style={styles.headerTitle}>成长精灵</Text>
               <Text style={styles.headerSubtitle}>{commandLabel}</Text>
