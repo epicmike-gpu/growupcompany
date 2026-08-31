@@ -941,10 +941,7 @@ export default function ChatScreen() {
                   ]}
                 >
                   <TouchableOpacity
-                    style={[
-                      styles.voiceButton,
-                      isRecording && styles.voiceButtonActive,
-                    ]}
+                    style={styles.voiceButton}
                     onPressIn={startRecording}
                     onPressOut={stopRecording}
                     disabled={isStreaming}
@@ -953,7 +950,7 @@ export default function ChatScreen() {
                     <FontAwesome6
                       name="microphone"
                       size={22}
-                      color={isRecording ? '#FFFFFF' : '#7C5CFC'}
+                      color="#7C5CFC"
                       solid
                     />
                   </TouchableOpacity>
@@ -1272,20 +1269,9 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#EDE8FF',
+    backgroundColor: '#F1EEFB',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#7C5CFC',
-    shadowColor: '#7C5CFC',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  voiceButtonActive: {
-    backgroundColor: '#7C5CFC',
-    transform: [{ scale: 1.05 }],
   },
   voiceHint: {
     flex: 1,
