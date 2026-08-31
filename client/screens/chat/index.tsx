@@ -24,7 +24,7 @@ import {
   WATER_CHAT_LINES,
 } from '@/utils/waterReminder';
 import Toast from 'react-native-toast-message';
-import EventSource from 'react-native-sse';
+import { connectSse } from '@/utils/sseClient';
 import { Audio } from 'expo-av';
 import { createFormDataFile } from '@/utils';
 
@@ -284,33 +284,32 @@ export default function ChatScreen() {
         return;
       }
 
-      const sse = new EventSource(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-session': token,
-        },
-        body: JSON.stringify({
-          message: text,
-          // 指令类型跟随消息本身：进入页面时的首条指令用页面的 command_type，
-          // 之后的对话消息一律按 free_chat 处理，话题靠 history 延续
-          command_type: msgCommandType || 'free_chat',
-          history: messages.map((m) => ({ role: m.role, content: m.content })),
-          english_tutor: englishTutor,
-        }),
-        // @ts-ignore - RN SSE library options
-        parsers: {
-          message: (data: string) => data,
-        },
-      });
-
       let accumulated = '';
       let accumulatedEn = '';
 
-      sse.addEventListener('message', (event: { data: string | null }) => {
-        const data = event.data;
-        if (data === '[DONE]') {
-          sse.close();
+      // 统一 SSE 客户端：Web 用 fetch+ReadableStream（经 Metro 代理时 XHR 会被缓冲成一次性交付，
+      // 导致流式期间收不到文字、语音和文字时序错乱），原生端用 react-native-sse
+      const stopSse = connectSse(
+        `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/chat`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-session': token,
+          },
+          body: JSON.stringify({
+            message: text,
+            // 指令类型跟随消息本身：进入页面时的首条指令用页面的 command_type，
+            // 之后的对话消息一律按 free_chat 处理，话题靠 history 延续
+            command_type: msgCommandType || 'free_chat',
+            history: messages.map((m) => ({ role: m.role, content: m.content })),
+            english_tutor: englishTutor,
+          }),
+        },
+        {
+          onMessage: (data) => {
+          if (data === '[DONE]') {
+            stopSse();
           setIsStreaming(false);
           // 回复结束：等最后一帧渲染完成后强制贴底，保证无需手动上滑
           requestAnimationFrame(() => {
@@ -370,22 +369,23 @@ export default function ChatScreen() {
         } catch {
           // Skip malformed JSON
         }
-      });
-
-      sse.addEventListener('error', (event) => {
-        sse.close();
-        if (!accumulated) {
-          setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id));
-        }
-        setIsStreaming(false);
-        // 次数用完：后端返回 403（QUOTA_EXHAUSTED）
-        if ((event as { status?: number })?.status === 403) {
-          Alert.alert('次数已用完', '聊天次数已经用完啦，请充值后继续和小精灵聊天哦', [
-            { text: '知道了', style: 'cancel' },
-            { text: '去充值', onPress: () => router.navigate('/paywall') },
-          ]);
-        }
-      });
+        },
+        onError: (event) => {
+          stopSse();
+          if (!accumulated) {
+            setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id));
+          }
+          setIsStreaming(false);
+          // 次数用完：后端返回 403（QUOTA_EXHAUSTED）
+          if ((event as { status?: number })?.status === 403) {
+            Alert.alert('次数已用完', '聊天次数已经用完啦，请充值后继续和小精灵聊天哦', [
+              { text: '知道了', style: 'cancel' },
+              { text: '去充值', onPress: () => router.navigate('/paywall') },
+            ]);
+          }
+        },
+      },
+    );
     } catch (error) {
       console.error('Chat error:', error);
       Toast.show({ type: 'error', text1: '网络错误，请重试' });
