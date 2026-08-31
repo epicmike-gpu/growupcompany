@@ -187,6 +187,16 @@ export default function ChatScreen() {
     })();
   }, []);
 
+  // 键盘弹出时把列表拉到底，避免最新消息被键盘挡住
+  useEffect(() => {
+    const showEvent =
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const sub = Keyboard.addListener(showEvent, () => {
+      flatListRef.current?.scrollToEnd({ animated: false });
+    });
+    return () => sub.remove();
+  }, []);
+
   // Initial message based on command type
   // Tabs 导航下聊天页不会卸载，必须用"每次进入的唯一 commandId"判断是否发送，
   // 而不是一次性 boolean ref（否则第二次从首页点指令进来不会再发送）
@@ -300,6 +310,10 @@ export default function ChatScreen() {
         if (data === '[DONE]') {
           sse.close();
           setIsStreaming(false);
+          // 回复结束：等最后一帧渲染完成后强制贴底，保证无需手动上滑
+          requestAnimationFrame(() => {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          });
           // Reset the cancel flag so the new auto-play chain is allowed to run
           autoPlayCancelledRef.current = false;
           // Sequential flow (English Tutor mode):
@@ -856,7 +870,9 @@ export default function ChatScreen() {
           keyExtractor={(item) => item.id}
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onContentSizeChange={() =>
+            flatListRef.current?.scrollToEnd({ animated: false })
+          }
           onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           showsVerticalScrollIndicator={false}
         />
