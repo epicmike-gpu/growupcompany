@@ -80,7 +80,7 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <Screen backgroundColor="#F0EDFA">
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#7C5CFC" />
         </View>

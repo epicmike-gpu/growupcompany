@@ -21,7 +21,8 @@ export default function RootLayout() {
             animation: 'slide_from_right',
             gestureEnabled: true,
             gestureDirection: 'horizontal',
-            headerShown: false
+            headerShown: false,
+            contentStyle: { backgroundColor: '#F0EDFA' },
           }}
         >
           <Stack.Screen name="(tabs)" options={{ title: "" }} />

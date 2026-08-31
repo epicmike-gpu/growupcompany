@@ -131,7 +131,7 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <Screen>
+      <Screen backgroundColor="#F0EDFA">
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#7C5CFC" />
         </View>
@@ -142,7 +142,7 @@ export default function ProfileScreen() {
   const isPremium = profile?.subscription_type === 'premium';
 
   return (
-    <Screen safeAreaEdges={['top', 'left', 'right']}>
+    <Screen backgroundColor="#F0EDFA" safeAreaEdges={['top', 'left', 'right']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}

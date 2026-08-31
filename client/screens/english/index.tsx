@@ -362,7 +362,7 @@ export default function EnglishScreen() {
   };
 
   return (
-    <Screen>
+    <Screen backgroundColor="#F0EDFA">
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         {screen === 'age' && renderAgeSelection()}
         {screen === 'theme' && renderThemeSelection()}
