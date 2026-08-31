@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSafeSearchParams } from '@/hooks/useSafeRouter';
+import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
 import { FontAwesome6 } from '@expo/vector-icons';
 import Toast from 'react-native-toast-message';
 import EventSource from 'react-native-sse';
@@ -147,6 +147,7 @@ function TTSPlayer({
 }
 
 export default function ChatScreen() {
+  const router = useSafeRouter();
   const { session } = useAuth();
   const { command_type, commandId, commandText: commandTextParam } = useSafeSearchParams<{
     command_type: string;
@@ -298,12 +299,19 @@ export default function ChatScreen() {
         }
       });
 
-      sse.addEventListener('error', () => {
+      sse.addEventListener('error', (event) => {
         sse.close();
         if (!accumulated) {
           setMessages((prev) => prev.filter((m) => m.id !== assistantMessage.id));
         }
         setIsStreaming(false);
+        // 次数用完：后端返回 403（QUOTA_EXHAUSTED）
+        if ((event as { status?: number })?.status === 403) {
+          Alert.alert('次数已用完', '聊天次数已经用完啦，请充值后继续和小精灵聊天哦', [
+            { text: '知道了', style: 'cancel' },
+            { text: '去充值', onPress: () => router.navigate('/profile') },
+          ]);
+        }
       });
     } catch (error) {
       console.error('Chat error:', error);

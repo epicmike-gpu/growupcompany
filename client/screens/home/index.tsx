@@ -206,6 +206,19 @@ export default function HomeScreen() {
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
         </View>
 
+        {/* 额度用尽提示 */}
+        {!isPremium && remaining <= 0 && (
+          <TouchableOpacity
+            style={styles.quotaBanner}
+            activeOpacity={0.8}
+            onPress={() => router.navigate('/profile')}
+          >
+            <FontAwesome6 name="circle-exclamation" size={16} color="#FFF" solid />
+            <Text style={styles.quotaBannerText}>聊天次数已经用完啦，请充值后再继续</Text>
+            <Text style={styles.quotaBannerAction}>去充值</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Recommended Tasks */}
         {recommended && recommended.tasks.length > 0 && (
           <View style={styles.recommendSection}>
@@ -494,6 +507,37 @@ const styles = StyleSheet.create({
   },
   recommendSection: {
     marginBottom: 28,
+  },
+  quotaBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF7043',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 12,
+    gap: 8,
+    shadowColor: '#FF7043',
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  quotaBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FFF',
+  },
+  quotaBannerAction: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#FFF',
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   recommendHeader: {
     flexDirection: 'row',

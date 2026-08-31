@@ -117,7 +117,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     const remaining = profile?.messages_remaining ?? 20;
 
     if (!isPremium && remaining <= 0) {
-      res.status(403).json({ error: '今日对话额度已用完，请升级会员获取更多对话次数' });
+      res.status(403).json({
+        error: '聊天次数已经用完啦，请充值后继续和精灵聊天',
+        code: 'QUOTA_EXHAUSTED',
+      });
       return;
     }
 
