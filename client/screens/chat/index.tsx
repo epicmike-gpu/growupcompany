@@ -15,7 +15,12 @@ import {
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSafeRouter, useSafeSearchParams } from '@/hooks/useSafeRouter';
+import { useFocusEffect } from 'expo-router';
 import { FontAwesome6 } from '@expo/vector-icons';
+import {
+  getWaterIntervalMinutes,
+  WATER_CHAT_LINES,
+} from '@/utils/waterReminder';
 import Toast from 'react-native-toast-message';
 import EventSource from 'react-native-sse';
 import { Audio } from 'expo-av';
@@ -30,6 +35,7 @@ interface Message {
   englishText?: string;
   audioUri?: string;
   englishAudioUri?: string;
+  kind?: 'chat' | 'water';
 }
 
 // Split bilingual LLM output: Chinese part + `---EN---` separator + English part
@@ -186,6 +192,57 @@ export default function ChatScreen() {
   // 而不是一次性 boolean ref（否则第二次从首页点指令进来不会再发送）
   const lastSentCommandIdRef = useRef<number | null>(null);
   const nextIdRef = useRef(0);
+
+  // 插入一条"喝水提醒"消息（不消耗聊天次数，不走 LLM）
+  const insertWaterReminder = useCallback(() => {
+    const line =
+      WATER_CHAT_LINES[Math.floor(Math.random() * WATER_CHAT_LINES.length)];
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `w-${++nextIdRef.current}`,
+        role: 'assistant',
+        content: line,
+        kind: 'water',
+      },
+    ]);
+  }, []);
+
+  // 喝水提醒：进入聊天页时读取开关；开启则按小朋友年龄对应的间隔定时提醒
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      let timer: ReturnType<typeof setInterval> | null = null;
+
+      (async () => {
+        try {
+          const token = session?.access_token;
+          if (!token) return;
+          /**
+           * 服务端文件：server/src/routes/profile.ts
+           * 接口：GET /api/v1/profile
+           * Headers: x-session: string
+           */
+          const res = await fetch(
+            `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/profile`,
+            { headers: { 'x-session': token } },
+          );
+          if (!res.ok) return;
+          const profile = await res.json();
+          if (cancelled || !profile?.water_reminder_enabled) return;
+          const minutes = getWaterIntervalMinutes(profile?.age ?? 5);
+          timer = setInterval(insertWaterReminder, minutes * 60 * 1000);
+        } catch {
+          // 拉取失败不影响聊天功能
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+        if (timer) clearInterval(timer);
+      };
+    }, [session?.access_token, insertWaterReminder]),
+  );
 
   const handleSendMessage = async (text: string, msgCommandType?: string) => {
     if (!text.trim() || isStreaming) return;
@@ -687,6 +744,19 @@ export default function ChatScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
+    // 喝水提醒卡片：居中浅蓝水滴样式，非普通聊天气泡
+    if (item.kind === 'water') {
+      return (
+        <View style={styles.waterReminderRow}>
+          <View style={styles.waterReminderCard}>
+            <View style={styles.waterIconWrap}>
+              <FontAwesome6 name="droplet" size={14} color="#0284C7" solid />
+            </View>
+            <Text style={styles.waterReminderText}>{item.content}</Text>
+          </View>
+        </View>
+      );
+    }
     const isUser = item.role === 'user';
     return (
       <View style={[styles.messageRow, isUser && styles.userMessageRow]}>
@@ -985,6 +1055,38 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 12,
     gap: 16,
+  },
+  waterReminderRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginVertical: 6,
+  },
+  waterReminderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#E0F2FE',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: '85%',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+  },
+  waterIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  waterReminderText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: '#0C4A6E',
+    fontWeight: '500',
   },
   messageRow: {
     flexDirection: 'row',

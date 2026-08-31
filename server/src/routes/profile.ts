@@ -37,7 +37,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 
     const { data, error } = await client
       .from('user_profiles')
-      .select('id, nickname, age, subscription_type, messages_remaining, created_at')
+      .select('id, nickname, age, subscription_type, messages_remaining, water_reminder_enabled, created_at')
       .eq('user_id', userId)
       .maybeSingle();
 
@@ -50,7 +50,7 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
       const { data: newProfile, error: insertError } = await client
         .from('user_profiles')
         .insert({ user_id: userId, subscription_type: 'free', messages_remaining: 100 })
-        .select('id, nickname, age, subscription_type, messages_remaining, created_at')
+        .select('id, nickname, age, subscription_type, messages_remaining, water_reminder_enabled, created_at')
         .single();
 
       if (insertError) throw new Error(`创建失败: ${insertError.message}`);
@@ -71,18 +71,21 @@ router.get('/', authMiddleware, async (req: Request, res: Response) => {
 router.put('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const userId = (req as any).userId;
-    const { nickname, age } = req.body;
+    const { nickname, age, water_reminder_enabled } = req.body;
     const client = getSupabaseClient();
 
     const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
     if (nickname !== undefined) updateData.nickname = nickname;
     if (age !== undefined) updateData.age = age;
+    if (water_reminder_enabled !== undefined) {
+      updateData.water_reminder_enabled = water_reminder_enabled === true;
+    }
 
     const { data, error } = await client
       .from('user_profiles')
       .update(updateData)
       .eq('user_id', userId)
-      .select('id, nickname, age, subscription_type, messages_remaining')
+      .select('id, nickname, age, subscription_type, messages_remaining, water_reminder_enabled')
       .single();
 
     if (error) throw new Error(`更新失败: ${error.message}`);

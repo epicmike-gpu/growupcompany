@@ -7,12 +7,19 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Switch,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { FontAwesome6 } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
+import {
+  getWaterIntervalMinutes,
+  ensureNotificationPermission,
+  scheduleWaterReminder,
+  cancelWaterReminder,
+} from '@/utils/waterReminder';
 
 const EXPO_PUBLIC_BACKEND_BASE_URL = process.env.EXPO_PUBLIC_BACKEND_BASE_URL;
 
@@ -22,6 +29,7 @@ interface UserProfile {
   age: number | null;
   subscription_type: string;
   messages_remaining: number;
+  water_reminder_enabled?: boolean;
 }
 
 const AGES = [3, 4, 5, 6, 7, 8, 9, 10];
@@ -65,10 +73,10 @@ export default function ProfileScreen() {
 
       /**
        * 服务端文件：server/src/routes/profile.ts
-       * 接口：PUT /api/v1/profile/age
+       * 接口：PUT /api/v1/profile
        * Body 参数：age: number
        */
-      const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/profile/age`, {
+      const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -83,6 +91,62 @@ export default function ProfileScreen() {
       }
     } catch (error) {
       console.error('Update age error:', error);
+    }
+  };
+
+  // 喝水提醒开关：保存到后端 + 调度/取消系统本地通知
+  const handleToggleWaterReminder = async (value: boolean) => {
+    const token = session?.access_token;
+    if (!token || !profile) return;
+
+    // 乐观更新 UI
+    setProfile((prev) =>
+      prev ? { ...prev, water_reminder_enabled: value } : prev,
+    );
+
+    try {
+      let notifyOk = false;
+      if (value) {
+        // App 外的系统通知：需权限；不支持通知的环境（如 Expo Go Android）自动降级为仅聊天内提醒
+        await ensureNotificationPermission();
+        notifyOk = await scheduleWaterReminder(
+          getWaterIntervalMinutes(profile.age ?? 5),
+          profile.age ?? 5,
+        );
+      } else {
+        await cancelWaterReminder();
+      }
+
+      /**
+       * 服务端文件：server/src/routes/profile.ts
+       * 接口：PUT /api/v1/profile
+       * Body 参数：water_reminder_enabled: boolean
+       */
+      const response = await fetch(`${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-session': token,
+        },
+        body: JSON.stringify({ water_reminder_enabled: value }),
+      });
+      if (!response.ok) throw new Error('保存失败');
+
+      if (value) {
+        const minutes = getWaterIntervalMinutes(profile.age ?? 5);
+        Alert.alert(
+          '喝水提醒已开启',
+          notifyOk
+            ? `会每 ${minutes} 分钟提醒小朋友喝一次水，聊天中和 App 外都会提醒哦！`
+            : `聊天中会每 ${minutes} 分钟提醒喝水；手机通知暂不可用，仅聊天内提醒。`,
+        );
+      }
+    } catch (error) {
+      // 保存失败回滚 UI
+      setProfile((prev) =>
+        prev ? { ...prev, water_reminder_enabled: !value } : prev,
+      );
+      console.error('Toggle water reminder error:', error);
     }
   };
 
@@ -192,6 +256,27 @@ export default function ProfileScreen() {
               ))}
             </View>
           )}
+
+          {/* Water Reminder */}
+          <View style={styles.settingItem}>
+            <View style={styles.settingLeft}>
+              <View style={[styles.settingIcon, { backgroundColor: '#E0F2FE' }]}>
+                <FontAwesome6 name="droplet" size={18} color="#0284C7" solid />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.settingLabel}>喝水提醒</Text>
+                <Text style={styles.settingSubLabel}>
+                  每 {getWaterIntervalMinutes(profile?.age ?? 5)} 分钟提醒一次
+                </Text>
+              </View>
+            </View>
+            <Switch
+              value={profile?.water_reminder_enabled ?? false}
+              onValueChange={handleToggleWaterReminder}
+              trackColor={{ false: '#E4E1F0', true: '#7C5CFC' }}
+              thumbColor="#FFFFFF"
+            />
+          </View>
 
           {/* Subscription */}
           {!isPremium && (
@@ -366,6 +451,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: '#2D2B3D',
+  },
+  settingSubLabel: {
+    fontSize: 11,
+    color: '#8B87A0',
+    marginTop: 2,
   },
   settingRight: {
     flexDirection: 'row',
