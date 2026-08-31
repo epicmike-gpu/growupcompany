@@ -84,7 +84,7 @@ interface LibraryData {
 
 const LEARN_CARD = { label: '学英语', icon: 'graduation-cap', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' };
 
-/** 3D 持续旋转的精灵星星：绕 Y 轴匀速翻转，带透视立体感（双层星体 + 高光） */
+/** 3D 持续旋转的精灵星星：绕 Y 轴匀速翻转，带透视立体感 */
 function SpinningSprite({ size = 36 }: { size?: number }) {
   const rotation = useSharedValue(0);
 
@@ -105,20 +105,8 @@ function SpinningSprite({ size = 36 }: { size?: number }) {
   }));
 
   return (
-    <Animated.View
-      style={[
-        {
-          // 宽高留 18% 缓冲：FontAwesome glyph 视觉宽约 1.125em，
-          // 避免旋转透视下星角溢出容器造成缺角观感
-          width: size * 1.18,
-          height: size * 1.18,
-          alignItems: 'center',
-          justifyContent: 'center',
-        },
-        spriteStyle,
-      ]}
-    >
-      <FontAwesome6 name="star" size={size} color="#FFD54A" solid />
+    <Animated.View style={spriteStyle}>
+      <FontAwesome6 name="star" size={size} color="#FFFFFF" solid />
     </Animated.View>
   );
 }
@@ -333,8 +321,8 @@ export default function HomeScreen() {
             heroCardSize.current = { w: width, h: height };
           }}
         >
-          <Animated.View
-            style={[styles.heroIconContainer, starFlyStyle]}
+          <View
+            style={styles.heroIconContainer}
             onLayout={(e) => {
               const { x, y } = e.nativeEvent.layout;
               starHome.current = { x, y };
@@ -349,14 +337,14 @@ export default function HomeScreen() {
                 experimentalBlurMethod={
                   Platform.OS === 'android' ? 'dimezisBlurView' : undefined
                 }
-                style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
+                style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
               <View style={styles.glassBallTint} pointerEvents="none" />
               <View style={styles.glassBallHighlight} pointerEvents="none" />
             </View>
-            {/* 星星悬浮在玻璃球面上，位于裁剪层之上；点击后带着玻璃球整体飞出弹跳 */}
-            <View style={styles.heroIconCenter}>
+            {/* 星星悬浮在玻璃球面上，位于裁剪层之上；点击后飞出弹跳 */}
+            <Animated.View style={[styles.heroIconCenter, starFlyStyle]}>
               <TouchableOpacity
                 activeOpacity={0.75}
                 onPress={startStarBounce}
@@ -364,8 +352,8 @@ export default function HomeScreen() {
               >
                 <SpinningSprite size={34} />
               </TouchableOpacity>
-            </View>
-          </Animated.View>
+            </Animated.View>
+          </View>
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
         </View>
@@ -651,8 +639,7 @@ const styles = StyleSheet.create({
   glassBall: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 28,
-    // 不用 overflow hidden：iOS 上 UIVisualEffectView 与父级圆角裁剪组合会渲染缺角，
-    // 改为模糊层/雾层各自自带 borderRadius（原生 layer 圆角）
+    overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.5)',
   },
@@ -663,7 +650,6 @@ const styles = StyleSheet.create({
   },
   glassBallTint: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 28,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
   glassBallHighlight: {
