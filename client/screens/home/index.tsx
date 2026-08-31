@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,9 +12,11 @@ import {
 import { BlurView } from 'expo-blur';
 import Animated, {
   Easing,
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withRepeat,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Screen } from '@/components/Screen';
@@ -199,6 +201,84 @@ export default function HomeScreen() {
     return t.label.toLowerCase().includes(q) || t.type.toLowerCase().includes(q);
   });
 
+  // ===== 玻璃球星星弹跳（在紫色 Hero 卡内反弹后弹回家）=====
+  const bounceX = useSharedValue(0);
+  const bounceY = useSharedValue(0);
+  const heroCardSize = useRef({ w: 0, h: 0 });
+  const starHome = useRef({ x: 0, y: 0 });
+  const bounceState = useRef({
+    x: 0, y: 0, vx: 0, vy: 0, active: false, raf: 0, last: 0, elapsed: 0,
+  });
+
+  const starFlyStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: bounceX.value },
+      { translateY: bounceY.value },
+    ],
+  }));
+
+  const startStarBounce = useCallback(() => {
+    const st = bounceState.current;
+    if (st.active) return; // 弹跳中忽略重复点击
+    const { w, h } = heroCardSize.current;
+    const home = starHome.current;
+    if (w < 80 || h < 80) return; // 布局未就绪
+    const minX = -home.x;
+    const maxX = w - home.x - 56;
+    const minY = -home.y;
+    const maxY = h - home.y - 56;
+    if (maxX <= minX + 8 || maxY <= minY + 8) return;
+
+    cancelAnimation(bounceX);
+    cancelAnimation(bounceY);
+    // 从当前位置（可能是回位半途）继续弹
+    st.x = bounceX.value;
+    st.y = bounceY.value;
+    st.vx = (Math.random() < 0.5 ? -1 : 1) * (170 + Math.random() * 90);
+    st.vy = (Math.random() < 0.5 ? -1 : 1) * (140 + Math.random() * 90);
+    st.elapsed = 0;
+    st.last = 0;
+    st.active = true;
+
+    const step = (now: number) => {
+      if (!st.last) st.last = now;
+      const dt = Math.min((now - st.last) / 1000, 0.05);
+      st.last = now;
+      st.elapsed += dt;
+      // 空气阻力：每秒保留约 62% 速度
+      const decay = Math.pow(0.62, dt);
+      st.vx *= decay;
+      st.vy *= decay;
+      st.x += st.vx * dt;
+      st.y += st.vy * dt;
+      // 撞壁反弹（恢复系数 0.85）
+      if (st.x < minX) { st.x = minX; st.vx = Math.abs(st.vx) * 0.85; }
+      else if (st.x > maxX) { st.x = maxX; st.vx = -Math.abs(st.vx) * 0.85; }
+      if (st.y < minY) { st.y = minY; st.vy = Math.abs(st.vy) * 0.85; }
+      else if (st.y > maxY) { st.y = maxY; st.vy = -Math.abs(st.vy) * 0.85; }
+      bounceX.value = st.x;
+      bounceY.value = st.y;
+      const speed = Math.hypot(st.vx, st.vy);
+      if (speed < 55 || st.elapsed > 3.2) {
+        // 力量耗尽：弹簧弹回玻璃球原位
+        st.active = false;
+        bounceX.value = withSpring(0, { damping: 15, stiffness: 130 });
+        bounceY.value = withSpring(0, { damping: 15, stiffness: 130 });
+        return;
+      }
+      st.raf = requestAnimationFrame(step);
+    };
+    st.raf = requestAnimationFrame(step);
+  }, [bounceX, bounceY]);
+
+  useEffect(() => {
+    const st = bounceState.current;
+    return () => {
+      cancelAnimationFrame(st.raf);
+      st.active = false;
+    };
+  }, []);
+
   if (loading) {
     return (
       <Screen backgroundColor="#F0EDFA">
@@ -234,8 +314,20 @@ export default function HomeScreen() {
         </View>
 
         {/* Hero Card */}
-        <View style={styles.heroCard}>
-          <View style={styles.heroIconContainer}>
+        <View
+          style={styles.heroCard}
+          onLayout={(e) => {
+            const { width, height } = e.nativeEvent.layout;
+            heroCardSize.current = { w: width, h: height };
+          }}
+        >
+          <View
+            style={styles.heroIconContainer}
+            onLayout={(e) => {
+              const { x, y } = e.nativeEvent.layout;
+              starHome.current = { x, y };
+            }}
+          >
             {/* 玻璃球体：独立裁剪层（真实磨砂模糊 + 白雾 + 高光），星星不放进裁剪层，
                 避免 iOS BlurView 与 3D transform 的渲染冲突导致星星被截断 */}
             <View style={styles.glassBall}>
@@ -251,10 +343,16 @@ export default function HomeScreen() {
               <View style={styles.glassBallTint} pointerEvents="none" />
               <View style={styles.glassBallHighlight} pointerEvents="none" />
             </View>
-            {/* 星星悬浮在玻璃球面上，位于裁剪层之上 */}
-            <View style={styles.heroIconCenter} pointerEvents="none">
-              <SpinningSprite size={34} />
-            </View>
+            {/* 星星悬浮在玻璃球面上，位于裁剪层之上；点击后飞出弹跳 */}
+            <Animated.View style={[styles.heroIconCenter, starFlyStyle]}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={startStarBounce}
+                accessibilityLabel="弹跳的星星"
+              >
+                <SpinningSprite size={34} />
+              </TouchableOpacity>
+            </Animated.View>
           </View>
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
@@ -536,6 +634,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     marginBottom: 8,
+    zIndex: 10,
   },
   glassBall: {
     ...StyleSheet.absoluteFillObject,
