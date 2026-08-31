@@ -6,7 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Alert,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
@@ -56,6 +56,7 @@ export default function EnglishScreen() {
   const [levelConfig, setLevelConfig] = useState<LevelConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { width: windowWidth } = useWindowDimensions();
 
   // 年龄组
   const ageGroups = [
@@ -135,16 +136,15 @@ export default function EnglishScreen() {
       const card2 = cards.find((c) => c.id === second);
 
       if (card1 && card2 && card1.pairId === card2.pairId) {
-        // 配对成功
+        // 配对成功（pairId 加入 Set 会自动去重，size = 已配对数）
         setTimeout(() => {
           setMatched((prev) => {
             const newSet = new Set(prev);
             newSet.add(card1.pairId);
-            newSet.add(card2.pairId);
-            // 检查是否完成
-            if (newSet.size === cards.length) {
+            // 检查是否完成：已配对数 === 总对数（cards.length / 2）
+            if (newSet.size === cards.length / 2) {
               if (timerRef.current) clearInterval(timerRef.current);
-              setTimeout(() => setScreen('result'), 500);
+              setTimeout(() => setScreen('result'), 600);
             }
             return newSet;
           });
@@ -261,13 +261,15 @@ export default function EnglishScreen() {
   // 渲染游戏
   const renderGame = () => {
     const cols = 4;
-    const cardWidth = (Dimensions.get('window').width - 80) / cols;
+    // 卡宽随屏幕宽度自适应：预留左右 padding 32 + 卡间距 gap 3×12
+    const cardWidth = Math.floor((windowWidth - 32 - (cols - 1) * 12) / cols);
+    const totalPairs = Math.max(cards.length / 2, 1);
 
     return (
       <View style={styles.gameContent}>
         <View style={styles.gameHeader}>
-          <TouchableOpacity onPress={() => setScreen('level')}>
-            <FontAwesome6 name="xmark" size={24} color="#7C5CFC" />
+          <TouchableOpacity style={styles.gameCloseBtn} onPress={() => setScreen('level')}>
+            <FontAwesome6 name="xmark" size={22} color="#7C5CFC" />
           </TouchableOpacity>
           <View style={styles.gameInfo}>
             <Text style={styles.gameTitle}>第 {level} 关</Text>
@@ -280,7 +282,7 @@ export default function EnglishScreen() {
           <View
             style={[
               styles.progressFill,
-              { width: `${(matched.size / cards.length) * 100}%` },
+              { width: `${Math.min((matched.size / totalPairs) * 100, 100)}%` },
             ]}
           />
         </View>
@@ -295,7 +297,7 @@ export default function EnglishScreen() {
                 key={card.id}
                 style={[
                   styles.card,
-                  { width: cardWidth, height: cardWidth * 1.2 },
+                  { width: cardWidth, height: cardWidth * 1.15 },
                   isFlipped && styles.cardFlipped,
                   isMatched && styles.cardMatched,
                 ]}
@@ -305,11 +307,13 @@ export default function EnglishScreen() {
                 {isFlipped ? (
                   <View style={styles.cardFront}>
                     <Text style={styles.cardEmoji}>{card.emoji}</Text>
-                    <Text style={styles.cardText}>{card.text}</Text>
+                    <Text style={styles.cardText} numberOfLines={2}>
+                      {card.text}
+                    </Text>
                   </View>
                 ) : (
                   <View style={styles.cardBack}>
-                    <FontAwesome6 name="question" size={32} color="#7C5CFC" />
+                    <FontAwesome6 name="question" size={26} color="#7C5CFC" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -526,13 +530,26 @@ const styles = StyleSheet.create({
   gameContent: {
     flex: 1,
     padding: 16,
-    paddingTop: 50,
+    paddingTop: 8,
   },
   gameHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 16,
+  },
+  gameCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
   },
   gameInfo: {
     flexDirection: 'row',
@@ -600,19 +617,24 @@ const styles = StyleSheet.create({
   },
   cardFront: {
     flex: 1,
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 6,
+    gap: 4,
   },
   cardEmoji: {
-    fontSize: 32,
-    marginBottom: 4,
+    fontSize: 26,
+    lineHeight: 30,
   },
   cardText: {
-    fontSize: 14,
+    fontSize: 12,
+    lineHeight: 15,
     fontWeight: '700',
     color: '#2D2B3D',
     textAlign: 'center',
+    flexShrink: 1,
   },
 
   // 结果界面
