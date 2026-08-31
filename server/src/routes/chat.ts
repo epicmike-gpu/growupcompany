@@ -126,11 +126,15 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     const englishTutorEnabled = englishTutor === true;
     if (englishTutorEnabled) {
       systemPrompt += `\n\n【English Tutor 模式】你的回复必须严格按照以下格式输出：
-1. 先用中文回复（2-4句话，符合小朋友年龄的活泼语言）。
+1. 先用中文回复（2-4句话，符合小朋友年龄的活泼语言）。中文部分必须有内容，绝对不能为空。
 2. 然后单独输出一行分隔符：---EN---
 3. 分隔符之后，用非常简单的英语再说一遍同样的意思（2-4句话，使用${userAge <= 5 ? '最基础' : '简单'}的英语单词和短句，适合${userAge}岁小朋友听懂）。
-注意：分隔符 ---EN--- 必须单独成行，不要在分隔符前后加其他文字。`;
+注意：
+- 分隔符 ---EN--- 必须单独成行，不要在分隔符前后加其他文字。
+- 必须先完整输出中文部分，再输出分隔符和英语部分，顺序绝对不能颠倒。`;
     }
+
+    systemPrompt += `\n\n【回复重点】请优先回应小朋友刚刚说的最新内容；如果小朋友说的是其他语言或不太清楚，请围绕他说的话友好互动，不要重复之前的话题。如果完全听不懂，请温和地请小朋友再说一遍。`;
 
     // Set up SSE
     res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
@@ -143,10 +147,9 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
 
     const llmMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemPrompt },
-      { role: 'user', content: message },
     ];
 
-    // Add history if provided
+    // Add history if provided (older messages first, newest last)
     if (history && Array.isArray(history)) {
       for (const msg of history) {
         if (msg.role === 'user' || msg.role === 'assistant') {
@@ -154,6 +157,9 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         }
       }
     }
+
+    // Current message MUST be the last one, so the LLM prioritizes it
+    llmMessages.push({ role: 'user', content: message });
 
     const stream = llmClient.stream(llmMessages, {
       model: 'doubao-seed-2-0-mini-260215',

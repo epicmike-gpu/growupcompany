@@ -222,9 +222,23 @@ export default function ChatScreen() {
           //   -> typewriter English text -> play English voice
           const zh = accumulated.trim();
           const en = accumulatedEn.trim();
+          // 兜底：LLM 格式错乱导致中文段为空时，把英语内容作为主文本显示，
+          // 避免出现"回复是空的/只有英语语音"的情况
+          if (!zh && en) {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === assistantMessage.id
+                  ? { ...m, content: en, englishText: undefined }
+                  : m
+              )
+            );
+          }
           const chain = (async () => {
             if (zh) {
               await autoPlayTTS(zh, assistantMessage.id, 'zh');
+            } else if (en) {
+              await autoPlayTTS(en, assistantMessage.id, 'zh');
+              return;
             }
             if (!en || autoPlayCancelledRef.current) return;
             await typeEnglishText(assistantMessage.id, en);
