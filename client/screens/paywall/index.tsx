@@ -160,9 +160,6 @@ export default function PaywallScreen() {
                       <Text style={styles.productDesc} numberOfLines={1}>
                         {p.subtitle}
                       </Text>
-                      <Text style={styles.productDesc}>
-                        约 {(p.price_cents / p.credits / 100).toFixed(2)} 元/次 · 永久有效
-                      </Text>
                     </View>
                   </View>
                   <Text style={styles.productPrice}>
