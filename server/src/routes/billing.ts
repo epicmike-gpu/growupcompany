@@ -18,14 +18,30 @@ interface IapProduct {
 
 const IAP_PRODUCTS: IapProduct[] = [
   {
-    product_id: 'com.kidx.credits.100',
-    title: '100 次对话',
-    subtitle: '适合体验完整的精灵陪伴',
-    credits: 100,
+    product_id: 'com.kidx.credits.50',
+    title: '50 次对话',
+    subtitle: '尝鲜体验 · 适合第一次充值',
+    credits: 50,
+    price_cents: 990,
+    currency: 'CNY',
+  },
+  {
+    product_id: 'com.kidx.credits.150',
+    title: '150 次对话',
+    subtitle: '比入门档多 2 倍次数，只贵一倍',
+    credits: 150,
     price_cents: 1990,
     currency: 'CNY',
-    tag: '¥19.9',
-    badge: '超值',
+    tag: '最受欢迎',
+  },
+  {
+    product_id: 'com.kidx.credits.400',
+    title: '400 次对话',
+    subtitle: '大额更划算 · 长期陪伴首选',
+    credits: 400,
+    price_cents: 3990,
+    currency: 'CNY',
+    tag: '超值',
   },
 ];
 
@@ -206,7 +222,13 @@ router.post('/orders/:id/verify', authMiddleware, async (req: Request, res: Resp
     if (incrError) throw new Error(`充值到账失败: ${incrError.message}`);
 
     res.json({
-      order: { ...order, status: 'delivered', transaction_id: transactionId, credits: creditsToDeliver },
+      order: {
+        ...order,
+        status: 'delivered',
+        transaction_id: transactionId,
+        credits: creditsToDeliver,
+        delivered_at: new Date().toISOString(),
+      },
       messages_remaining: updated.messages_remaining,
       already_delivered: false,
     });

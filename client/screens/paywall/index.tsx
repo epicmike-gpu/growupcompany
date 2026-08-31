@@ -33,7 +33,10 @@ export default function PaywallScreen() {
     try {
       const list = await fetchProducts();
       setProducts(list);
-      setSelected(list[0]?.product_id ?? null);
+      // 默认选中主推档（最受欢迎），无则选第一档
+      const preferred =
+        list.find((p) => p.tag === '最受欢迎') ?? list[0] ?? null;
+      setSelected(preferred?.product_id ?? null);
 
       const { data } = await getSupabaseClient().auth.getSession();
       const token = data.session?.access_token;
@@ -153,7 +156,10 @@ export default function PaywallScreen() {
                       <FontAwesome6 name="comments" size={20} color="#7C5CFC" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.productTitle}>{p.subtitle}</Text>
+                      <Text style={styles.productTitle}>{p.title}</Text>
+                      <Text style={styles.productDesc} numberOfLines={1}>
+                        {p.subtitle}
+                      </Text>
                       <Text style={styles.productDesc}>
                         约 {(p.price_cents / p.credits / 100).toFixed(2)} 元/次 · 永久有效
                       </Text>

@@ -21,7 +21,7 @@ export interface BillingProduct {
   credits: number;
   price_cents: number;
   currency: string;
-  tag: string | null;
+  tag?: string | null;
 }
 
 export interface PurchaseResult {

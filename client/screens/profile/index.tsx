@@ -203,7 +203,7 @@ export default function ProfileScreen() {
                 <Text style={styles.settingLabel}>升级会员</Text>
               </View>
               <View style={styles.settingRight}>
-                <Text style={styles.settingValue}>¥19.9/100次</Text>
+                <Text style={styles.settingValue}>¥9.9 起</Text>
                 <FontAwesome6 name="chevron-right" size={14} color="#8B87A0" />
               </View>
             </TouchableOpacity>
