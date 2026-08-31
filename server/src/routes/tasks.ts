@@ -38,6 +38,24 @@ const TASK_POOL: TaskDef[] = [
     reason: '太阳出来啦，蹦蹦跳跳长高高！',
     minAge: 3, maxAge: 10, slots: ['morning', 'afternoon'],
   },
+  {
+    type: 'dress_up', label: '自己穿衣', icon: 'shirt',
+    color: '#FFA726', bg: '#FFF3E0', shadow: '#FFA726',
+    reason: '小勇士自己变身，穿衣服超厉害！',
+    minAge: 3, maxAge: 10, slots: ['morning'],
+  },
+  {
+    type: 'pack_bag', label: '收拾书包', icon: 'bag-shopping',
+    color: '#8D6E63', bg: '#F1EAE4', shadow: '#8D6E63',
+    reason: '宝贝们要归队啦，书包寻宝开始！',
+    minAge: 5, maxAge: 10, slots: ['morning', 'evening'],
+  },
+  {
+    type: 'eat_fruit', label: '吃水果', icon: 'apple-whole',
+    color: '#EF5350', bg: '#FFEBEE', shadow: '#EF5350',
+    reason: '维他命小能量兵，吃了变聪明！',
+    minAge: 3, maxAge: 10, slots: ['morning', 'afternoon'],
+  },
   // ===== 中午 =====
   {
     type: 'eat_vegetables', label: '吃蔬菜', icon: 'carrot',
@@ -50,6 +68,18 @@ const TASK_POOL: TaskDef[] = [
     color: '#FF8FAB', bg: '#FFE8EE', shadow: '#FF8FAB',
     reason: '午睡一小会儿，下午更有精神玩！',
     minAge: 3, maxAge: 8, slots: ['noon'],
+  },
+  {
+    type: 'nap', label: '午睡', icon: 'bed',
+    color: '#9575CD', bg: '#EDE7F6', shadow: '#9575CD',
+    reason: '给身体充充电，睡醒元气满满！',
+    minAge: 3, maxAge: 8, slots: ['noon'],
+  },
+  {
+    type: 'wash_hands', label: '饭前洗手', icon: 'pump-soap',
+    color: '#4DD0E1', bg: '#E0F7FA', shadow: '#4DD0E1',
+    reason: '泡泡魔法出发，赶走细菌小怪兽！',
+    minAge: 3, maxAge: 10, slots: ['noon', 'evening'],
   },
   {
     type: 'study', label: '学习', icon: 'book',
@@ -71,6 +101,12 @@ const TASK_POOL: TaskDef[] = [
     minAge: 6, maxAge: 10, slots: ['afternoon'],
   },
   {
+    type: 'sit_straight', label: '坐姿端正', icon: 'chair',
+    color: '#66BB6A', bg: '#E8F5E9', shadow: '#66BB6A',
+    reason: '像小树苗一样挺拔，眼睛更明亮！',
+    minAge: 5, maxAge: 10, slots: ['afternoon', 'evening'],
+  },
+  {
     type: 'free_chat', label: '聊聊天', icon: 'comments',
     color: '#7C5CFC', bg: '#EDE8FF', shadow: '#7C5CFC',
     reason: '精灵想听听你今天的新鲜事！',
@@ -88,6 +124,24 @@ const TASK_POOL: TaskDef[] = [
     color: '#AB47BC', bg: '#F3E5F5', shadow: '#AB47BC',
     reason: '睡前温习一小会儿，明天更轻松！',
     minAge: 8, maxAge: 10, slots: ['evening'],
+  },
+  {
+    type: 'breathe', label: '深呼吸', icon: 'wind',
+    color: '#4FC3F7', bg: '#E3F6FD', shadow: '#4FC3F7',
+    reason: '闻闻花香吹吹蜡烛，心里静悄悄～',
+    minAge: 3, maxAge: 10, slots: ['evening', 'night'],
+  },
+  {
+    type: 'praise_day', label: '今天真棒', icon: 'thumbs-up',
+    color: '#FFD54F', bg: '#FFF8E1', shadow: '#FFD54F',
+    reason: '精灵想夸夸今天厉害的你！',
+    minAge: 3, maxAge: 10, slots: ['morning', 'noon', 'afternoon', 'evening', 'night'],
+  },
+  {
+    type: 'strength', label: '优点大发现', icon: 'medal',
+    color: '#F06292', bg: '#FCE4EC', shadow: '#F06292',
+    reason: '一起来挖一挖你身上的小宝藏！',
+    minAge: 3, maxAge: 10, slots: ['morning', 'noon', 'afternoon', 'evening', 'night'],
   },
   // ===== 夜晚 =====
   {

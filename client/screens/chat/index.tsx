@@ -39,6 +39,7 @@ const splitBilingual = (raw: string): { zh: string; en: string } => {
   return { zh: raw.slice(0, idx), en: raw.slice(idx + 8) };
 };
 
+// command_type → 发给 LLM 的初始话术（普通任务=提醒去做好件事；赞美类=请精灵夸夸我）
 const COMMAND_LABELS: Record<string, string> = {
   drink_water: '喝水',
   sleep: '睡觉',
@@ -49,6 +50,24 @@ const COMMAND_LABELS: Record<string, string> = {
   exercise: '运动',
   study: '学习',
   free_chat: '自由聊天',
+  // 生活习惯类
+  dress_up: '自己穿衣',
+  pack_bag: '收拾书包',
+  wash_hands: '饭前洗手',
+  nap: '午睡',
+  // 健康身体类
+  eat_fruit: '吃水果',
+  sit_straight: '坐姿端正',
+  breathe: '深呼吸放松',
+  // 赞美类
+  praise_day: '今天真棒',
+  strength: '优点大发现',
+};
+
+// 赞美类不用"请提醒我去XX"句式，用专属话术
+const PRAISE_COMMAND_TEXT: Record<string, string> = {
+  praise_day: '请夸夸我今天的表现，问问我今天做了什么，然后真诚地表扬我',
+  strength: '请和我玩"优点大发现"游戏，帮我发现我身上的优点，然后夸夸我',
 };
 
 // TTS player component for AI messages
@@ -488,7 +507,8 @@ export default function ChatScreen() {
     if (typeof commandId !== 'number') return;
     if (lastSentCommandIdRef.current === commandId) return;
     lastSentCommandIdRef.current = commandId;
-    handleSendMessage(`请提醒我去${commandLabel}`, command_type);
+    const commandText = PRAISE_COMMAND_TEXT[command_type] || `请提醒我去${commandLabel}`;
+    handleSendMessage(commandText, command_type);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commandId]);
 

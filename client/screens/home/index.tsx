@@ -51,6 +51,18 @@ const COMMANDS = [
   { type: 'brush_teeth', label: '刷牙', icon: 'tooth', color: '#FFCB57', bg: '#FFF4DD', shadow: '#FFCB57' },
   { type: 'exercise', label: '运动', icon: 'dumbbell', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' },
   { type: 'study', label: '学习', icon: 'book', color: '#AB47BC', bg: '#F3E5F5', shadow: '#AB47BC' },
+  // 生活习惯类
+  { type: 'dress_up', label: '自己穿衣', icon: 'shirt', color: '#FFA726', bg: '#FFF3E0', shadow: '#FFA726' },
+  { type: 'pack_bag', label: '收拾书包', icon: 'bag-shopping', color: '#8D6E63', bg: '#F1EAE4', shadow: '#8D6E63' },
+  { type: 'wash_hands', label: '饭前洗手', icon: 'pump-soap', color: '#4DD0E1', bg: '#E0F7FA', shadow: '#4DD0E1' },
+  { type: 'nap', label: '午睡', icon: 'bed', color: '#9575CD', bg: '#EDE7F6', shadow: '#9575CD' },
+  // 健康身体类
+  { type: 'eat_fruit', label: '吃水果', icon: 'apple-whole', color: '#EF5350', bg: '#FFEBEE', shadow: '#EF5350' },
+  { type: 'sit_straight', label: '坐姿端正', icon: 'chair', color: '#66BB6A', bg: '#E8F5E9', shadow: '#66BB6A' },
+  { type: 'breathe', label: '深呼吸', icon: 'wind', color: '#4FC3F7', bg: '#E3F6FD', shadow: '#4FC3F7' },
+  // 赞美类
+  { type: 'praise_day', label: '今天真棒', icon: 'thumbs-up', color: '#FFD54F', bg: '#FFF8E1', shadow: '#FFD54F' },
+  { type: 'strength', label: '优点大发现', icon: 'medal', color: '#F06292', bg: '#FCE4EC', shadow: '#F06292' },
 ];
 
 const LEARN_CARD = { label: '学英语', icon: 'graduation-cap', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' };
