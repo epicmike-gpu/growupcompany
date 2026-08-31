@@ -84,8 +84,8 @@ interface LibraryData {
 
 const LEARN_CARD = { label: '学英语', icon: 'graduation-cap', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' };
 
-/** 3D 持续旋转的精灵星星：绕 Y 轴匀速翻转，带透视立体感；可叠加表情层 */
-function SpinningSprite({ size = 36, children }: { size?: number; children?: React.ReactNode }) {
+/** 3D 持续旋转的精灵星星：绕 Y 轴匀速翻转，带透视立体感（双层星体 + 高光） */
+function SpinningSprite({ size = 36 }: { size?: number }) {
   const rotation = useSharedValue(0);
 
   useEffect(() => {
@@ -105,9 +105,32 @@ function SpinningSprite({ size = 36, children }: { size?: number; children?: Rea
   }));
 
   return (
-    <Animated.View style={spriteStyle}>
-      <FontAwesome6 name="star" size={size} color="#FFD54A" solid />
-      {children}
+    <Animated.View
+      style={[
+        { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
+        spriteStyle,
+      ]}
+    >
+      {/* 厚度层：右下偏移的深琥珀色星体，形成 3D 侧壁 */}
+      <FontAwesome6
+        name="star"
+        size={size}
+        color="#C97F06"
+        solid
+        style={{ position: 'absolute', transform: [{ translateX: 2.5 }, { translateY: 3.5 }] }}
+      />
+      {/* 主星体：亮黄 + 左上高光投影 */}
+      <FontAwesome6
+        name="star"
+        size={size}
+        color="#FFD54A"
+        solid
+        style={{
+          textShadowColor: 'rgba(255,255,255,0.55)',
+          textShadowOffset: { width: -1.5, height: -2 },
+          textShadowRadius: 2.5,
+        }}
+      />
     </Animated.View>
   );
 }
@@ -351,14 +374,7 @@ export default function HomeScreen() {
                 onPress={startStarBounce}
                 accessibilityLabel="弹跳的星星"
               >
-                <SpinningSprite size={34}>
-                  {/* 微笑表情层：随星星一起 3D 翻转 */}
-                  <View style={styles.spriteFace} pointerEvents="none">
-                    <View style={styles.spriteFaceEye} />
-                    <View style={styles.spriteFaceEyeRight} />
-                    <View style={styles.spriteFaceMouth} />
-                  </View>
-                </SpinningSprite>
+                <SpinningSprite size={34} />
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -669,40 +685,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: 'rgba(255,255,255,0.6)',
     transform: [{ rotate: '-24deg' }],
-  },
-  // 星星上的微笑表情（随星星一起 3D 翻转）
-  spriteFace: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  spriteFaceEye: {
-    position: 'absolute',
-    top: 9,
-    left: 9,
-    width: 5,
-    height: 7,
-    borderRadius: 3,
-    backgroundColor: '#5C3A00',
-  },
-  spriteFaceEyeRight: {
-    position: 'absolute',
-    top: 9,
-    right: 9,
-    width: 5,
-    height: 7,
-    borderRadius: 3,
-    backgroundColor: '#5C3A00',
-  },
-  spriteFaceMouth: {
-    position: 'absolute',
-    top: 17,
-    left: 10,
-    width: 14,
-    height: 8,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-    borderWidth: 2.5,
-    borderTopWidth: 0,
-    borderColor: '#5C3A00',
   },
   heroTitle: {
     fontSize: 22,
