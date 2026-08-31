@@ -16,7 +16,9 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -129,11 +131,70 @@ function OrbitStar() {
 
   return (
     <Animated.View style={[styles.orbitLayer, orbitStyle]} pointerEvents="none">
+      {/* 纯绘制玻璃球（不使用系统模糊 API，规避 iOS UIVisualEffectView 渲染截断） */}
+      <View style={styles.orbitGlass}>
+        <LinearGradient
+          colors={['rgba(255,255,255,0.40)', 'rgba(255,255,255,0.10)', 'rgba(150,130,255,0.26)']}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={styles.orbitGlassHighlight} />
+      </View>
+      {/* 拖尾小星：以滞后角跟随主星轨迹 */}
+      {TRAIL_STARS.map((cfg) => (
+        <TrailStar key={cfg.delay} angle={angle} radius={radius} squash={squash} cfg={cfg} />
+      ))}
+      {/* 主星 */}
       <View style={styles.orbitStarWrap}>
         <Animated.View style={[spinStyle, starDepthStyle]}>
           <FontAwesome6 name="star" size={16} color="#FFD24C" solid />
         </Animated.View>
       </View>
+    </Animated.View>
+  );
+}
+
+type TrailCfg = { delay: number; size: number; color: string };
+
+// 拖尾星配置：delay 为滞后弧度，尺寸/颜色随距离衰减
+const TRAIL_STARS: TrailCfg[] = [
+  { delay: 0.3, size: 11, color: '#FFE9A8' },
+  { delay: 0.62, size: 10, color: '#FFE28A' },
+  { delay: 0.96, size: 8.5, color: '#FFD966' },
+  { delay: 1.34, size: 7, color: '#F2C94C' },
+  { delay: 1.76, size: 6, color: '#EAB308' },
+  { delay: 2.22, size: 5, color: '#D9A514' },
+  { delay: 2.74, size: 4.5, color: '#C9962E' },
+];
+
+function TrailStar({
+  angle,
+  radius,
+  squash,
+  cfg,
+}: {
+  angle: SharedValue<number>;
+  radius: SharedValue<number>;
+  squash: SharedValue<number>;
+  cfg: TrailCfg;
+}) {
+  const trailStyle = useAnimatedStyle(() => {
+    const a = angle.value - cfg.delay;
+    const depth = Math.sin(a);
+    const t = (depth + 1) / 2;
+    return {
+      transform: [
+        { translateX: radius.value * Math.cos(a) },
+        { translateY: radius.value * squash.value * Math.sin(a) },
+        { scale: 0.6 + 0.4 * t },
+      ],
+      opacity: 0.2 + 0.7 * t,
+      zIndex: depth > 0 ? 3 : 0,
+    };
+  });
+  return (
+    <Animated.View style={[styles.trailStar, trailStyle]} pointerEvents="none">
+      <FontAwesome6 name="star" size={cfg.size} color={cfg.color} solid />
     </Animated.View>
   );
 }
@@ -462,10 +523,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.55)',
     backgroundColor: 'rgba(255,255,255,0.08)',
   },
-  orbitGlassTint: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.16)',
-  },
   orbitGlassHighlight: {
     position: 'absolute',
     top: 3,
@@ -478,6 +535,15 @@ const styles = StyleSheet.create({
   },
   orbitStarWrap: {
     ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trailStar: {
+    position: 'absolute',
+    left: 135,
+    top: 115,
+    width: 20,
+    height: 20,
     alignItems: 'center',
     justifyContent: 'center',
   },
