@@ -17,7 +17,6 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
 import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { FontAwesome6 } from '@expo/vector-icons';
@@ -130,15 +129,6 @@ function OrbitStar() {
 
   return (
     <Animated.View style={[styles.orbitLayer, orbitStyle]} pointerEvents="none">
-      <View style={styles.orbitGlass}>
-        <BlurView
-          style={StyleSheet.absoluteFill}
-          intensity={22}
-          tint="light"
-        />
-        <View style={styles.orbitGlassTint} pointerEvents="none" />
-        <View style={styles.orbitGlassHighlight} pointerEvents="none" />
-      </View>
       <View style={styles.orbitStarWrap}>
         <Animated.View style={[spinStyle, starDepthStyle]}>
           <FontAwesome6 name="star" size={16} color="#FFD24C" solid />
