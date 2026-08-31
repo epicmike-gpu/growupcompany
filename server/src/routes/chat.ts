@@ -95,6 +95,10 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     const { message, command_type, age, history } = req.body;
     // 兼容 camelCase 和 snake_case 两种命名
     const englishTutor = req.body.englishTutor === true || req.body.english_tutor === true;
+    // 服务端诊断：请求参数留痕
+    console.log(
+      `[chat] req cmd=${command_type} tutor=${englishTutor} msgLen=${(message as string).length} historyLen=${Array.isArray(history) ? history.length : 0}`
+    );
 
     if (!message || !command_type) {
       res.status(400).json({ error: '缺少必要参数' });
@@ -246,6 +250,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
         })
         .eq('user_id', userId);
     }
+
+    // 服务端诊断：流式输出统计留痕
+    const zhLen = (fullResponse.split('---EN---')[0] || '').length;
+    const enLen = fullResponse.includes('---EN---') ? (fullResponse.split('---EN---')[1] || '').length : 0;
+    console.log(`[chat] done cmd=${command_type} tutor=${englishTutor} zhLen=${zhLen} enLen=${enLen}`);
 
     res.write('data: [DONE]\n\n');
     res.end();

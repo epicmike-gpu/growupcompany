@@ -1,13 +1,16 @@
 import { Platform } from 'react-native';
-import EventSource from 'react-native-sse';
+import { fetch as expoFetch } from 'expo/fetch';
 
 /**
- * 统一 SSE 客户端
+ * 统一 SSE 客户端（Web / 原生共用同一套解析逻辑）
  *
- * 为什么 Web 端不用 react-native-sse：
- * Web 环境下该库走 XHR，请求经 Metro 代理转发时 SSE 响应会被缓冲成
- * 一次性交付——流式期间收不到任何事件，文字/语音时序全部错乱。
- * Web 端改用标准 fetch + ReadableStream 逐块解析；原生端保持 react-native-sse。
+ * - Web：全局 fetch + ReadableStream（Metro 代理下 XHR 类方案会被缓冲成一次性交付）
+ * - 原生（iOS / Android / Expo Go）：expo/fetch（Expo 官方网络模块，SDK 52+，
+ *   支持流式 response.body.getReader()）。
+ *   之前的 react-native-sse 基于 XHR 封装，事件分发行为不可控（存在流式期间
+ *   message 事件不触发 / 正常结束时额外触发 error 的隐患），已弃用。
+ *
+ * SSE 协议解析：按空行（\n\n）切分事件块，取 data: 行合并作为事件负载。
  */
 
 export type SseOptions = {
@@ -21,35 +24,18 @@ export type SseHandlers = {
   onError: (event: unknown) => void;
 };
 
-/** 返回停止函数（关闭连接） */
+/** 返回停止函数（中断连接） */
 export function connectSse(
   url: string,
   options: SseOptions,
   handlers: SseHandlers,
 ): () => void {
-  // —— 原生端（iOS / Android）：react-native-sse —— //
-  if (Platform.OS !== 'web') {
-    const es = new EventSource(url, {
-      method: options.method ?? 'GET',
-      headers: options.headers,
-      body: options.body,
-    } as never);
-
-    es.addEventListener('message', (event: { data: string | null }) => {
-      handlers.onMessage(event.data);
-    });
-    es.addEventListener('error', (event: unknown) => {
-      handlers.onError(event);
-    });
-
-    return () => es.close();
-  }
-
-  // —— Web 端：fetch + ReadableStream —— //
   const controller = new AbortController();
+
   (async () => {
     try {
-      const res = await fetch(url, {
+      const doFetch = Platform.OS === 'web' ? fetch : expoFetch;
+      const res = await doFetch(url, {
         method: options.method ?? 'GET',
         headers: options.headers,
         body: options.body,
