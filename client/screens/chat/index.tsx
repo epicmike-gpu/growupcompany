@@ -503,13 +503,23 @@ export default function ChatScreen() {
       setHasMicPermission(true);
     }
 
+    // 停止正在自动播报的语音：
+    // 1. 避免麦克风把精灵播报的声音录进去，导致 ASR 转出上一条回复内容
+    // 2. 避免 iOS 录音模式与播放冲突
+    stopAutoSound();
+
     if (isStreaming) {
       Toast.show({ type: 'info', text1: '精灵正在说话，请稍等' });
       return;
     }
 
+    // 清理可能残留的旧录音对象（已 unload 的对象二次 stop 会抛错，需捕获）
     if (recordingRef.current) {
-      await recordingRef.current.stopAndUnloadAsync();
+      try {
+        await recordingRef.current.stopAndUnloadAsync();
+      } catch {
+        // ignore
+      }
       recordingRef.current = null;
     }
 
@@ -536,19 +546,34 @@ export default function ChatScreen() {
   };
 
   const stopRecording = async () => {
-    if (!recordingRef.current) return;
-
-    // Reset animation
+    // 无论是否有进行中的录音，都先把按钮动画复位
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
     }).start();
 
+    if (!recordingRef.current) return;
+
+    const recording = recordingRef.current;
+    recordingRef.current = null;
+    setIsRecording(false);
+
+    // 先读取录音时长（unload 后不可再查），失败时视为有效录音
+    let durationMs = -1;
     try {
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
-      setIsRecording(false);
+      const status = (await recording.getStatusAsync()) as unknown as {
+        durationMillis?: number;
+      };
+      if (typeof status?.durationMillis === 'number') {
+        durationMs = status.durationMillis;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
 
       // 立即切回播放模式，否则 iOS 上录音模式会导致后续语音播放静音
       await Audio.setAudioModeAsync({
@@ -557,6 +582,11 @@ export default function ChatScreen() {
       });
 
       if (uri) {
+        // 最短录音时长校验：按住时间太短（<600ms）录到的多半是杂音/半截声音，不发送
+        if (durationMs >= 0 && durationMs < 600) {
+          Toast.show({ type: 'info', text1: '说话时间太短啦', text2: '请按住按钮再说一次' });
+          return;
+        }
         await sendVoiceMessage(uri);
       }
     } catch (error) {
