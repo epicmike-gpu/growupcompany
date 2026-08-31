@@ -113,9 +113,10 @@ function OrbitStar() {
         { translateY: radius.value * squash.value * Math.sin(a) },
         { scale: 0.68 + 0.32 * t },
       ],
-      opacity: 0.45 + 0.55 * t,
+      // 注意：此处不可加动态 opacity/elevation——
+      // iOS 上 opacity<1 作用于含 BlurView 的层会截断渲染，
+      // Android 上 elevation 动态切换会打乱含模糊层的绘制
       zIndex: depth > 0 ? 3 : 0,
-      elevation: depth > 0 ? 10 : 0,
     };
   });
 
@@ -130,7 +131,6 @@ function OrbitStar() {
           style={StyleSheet.absoluteFill}
           intensity={22}
           tint="light"
-          experimentalBlurMethod={Platform.OS === 'android' ? 'dimezisBlurView' : undefined}
         />
         <View style={styles.orbitGlassTint} pointerEvents="none" />
         <View style={styles.orbitGlassHighlight} pointerEvents="none" />
@@ -499,7 +499,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
     shadowRadius: 16,
-    elevation: 6,
     zIndex: 1,
   },
   nickname: {
