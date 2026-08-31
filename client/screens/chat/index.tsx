@@ -701,7 +701,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <Screen backgroundColor="#F0EDFA">
+    <Screen backgroundColor="#F0EDFA" safeAreaEdges={['top', 'left', 'right']}>
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

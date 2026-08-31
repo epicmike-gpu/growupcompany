@@ -9,9 +9,9 @@ export default function TabLayout() {
   let tabBarStyle: Record<string, unknown> = {
     backgroundColor: '#F0EDFA',
     borderTopWidth: 0,
-    height: 70 + insets.bottom,
-    paddingBottom: 8 + insets.bottom,
-    paddingTop: 8,
+    height: 54 + insets.bottom,
+    paddingBottom: 4 + insets.bottom,
+    paddingTop: 4,
     elevation: 0,
   };
 

@@ -142,7 +142,7 @@ export default function ProfileScreen() {
   const isPremium = profile?.subscription_type === 'premium';
 
   return (
-    <Screen>
+    <Screen safeAreaEdges={['top', 'left', 'right']}>
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
