@@ -701,7 +701,7 @@ export default function ChatScreen() {
   };
 
   return (
-    <Screen>
+    <Screen backgroundColor="#F0EDFA">
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -760,28 +760,30 @@ export default function ChatScreen() {
         <View style={styles.inputContainer}>
           {inputMode === 'text' ? (
             <>
-              <TextInput
-                style={styles.input}
-                placeholder="说点什么..."
-                placeholderTextColor="#8B87A0"
-                value={inputText}
-                onChangeText={setInputText}
-                multiline
-                maxLength={500}
-                onSubmitEditing={handleSend}
-                returnKeyType="send"
-              />
-              <TouchableOpacity
-                style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-                onPress={handleSend}
-                disabled={!inputText.trim() || isStreaming}
-              >
-                {isStreaming ? (
-                  <ActivityIndicator size="small" color="#FFFFFF" />
-                ) : (
-                  <FontAwesome6 name="paper-plane" size={18} color="#FFFFFF" solid />
-                )}
-              </TouchableOpacity>
+              <View style={styles.voiceBar}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="说点什么..."
+                  placeholderTextColor="#8B87A0"
+                  value={inputText}
+                  onChangeText={setInputText}
+                  multiline
+                  maxLength={500}
+                  onSubmitEditing={handleSend}
+                  returnKeyType="send"
+                />
+                <TouchableOpacity
+                  style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
+                  onPress={handleSend}
+                  disabled={!inputText.trim() || isStreaming}
+                >
+                  {isStreaming ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <FontAwesome6 name="paper-plane" size={18} color="#FFFFFF" solid />
+                  )}
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={styles.modeToggleButton}
                 onPress={() => setInputMode('voice')}
@@ -791,42 +793,44 @@ export default function ChatScreen() {
             </>
           ) : (
             <>
-              {/* Push-to-talk button */}
-              <Animated.View
-                style={[
-                  styles.voiceButtonWrapper,
-                  { transform: [{ scale: scaleAnim }] },
-                ]}
-              >
-                <TouchableOpacity
+              <View style={styles.voiceBar}>
+                {/* Push-to-talk button */}
+                <Animated.View
                   style={[
-                    styles.voiceButton,
-                    isRecording && styles.voiceButtonActive,
+                    styles.voiceButtonWrapper,
+                    { transform: [{ scale: scaleAnim }] },
                   ]}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.voiceButton,
+                      isRecording && styles.voiceButtonActive,
+                    ]}
+                    onPressIn={startRecording}
+                    onPressOut={stopRecording}
+                    disabled={isStreaming}
+                    activeOpacity={0.7}
+                  >
+                    <FontAwesome6
+                      name="microphone"
+                      size={28}
+                      color={isRecording ? '#FFFFFF' : '#7C5CFC'}
+                      solid
+                    />
+                  </TouchableOpacity>
+                </Animated.View>
+                <TouchableOpacity
+                  style={styles.voiceHint}
+                  activeOpacity={0.6}
                   onPressIn={startRecording}
                   onPressOut={stopRecording}
                   disabled={isStreaming}
-                  activeOpacity={0.7}
                 >
-                  <FontAwesome6
-                    name="microphone"
-                    size={28}
-                    color={isRecording ? '#FFFFFF' : '#7C5CFC'}
-                    solid
-                  />
+                  <Text style={styles.voiceHintText}>
+                    {isRecording ? '松开结束录音' : '按住说话'}
+                  </Text>
                 </TouchableOpacity>
-              </Animated.View>
-              <TouchableOpacity
-                style={styles.voiceHint}
-                activeOpacity={0.6}
-                onPressIn={startRecording}
-                onPressOut={stopRecording}
-                disabled={isStreaming}
-              >
-                <Text style={styles.voiceHintText}>
-                  {isRecording ? '松开结束录音' : '按住说话'}
-                </Text>
-              </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={styles.modeToggleButton}
                 onPress={() => setInputMode('text')}
@@ -1023,17 +1027,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 20,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#EDE8FF',
+    paddingTop: 10,
+    paddingBottom: 16,
+    backgroundColor: '#F0EDFA',
+    gap: 10,
+    minHeight: 80,
+  },
+  voiceBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
-    minHeight: 84,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#E2DAFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    minHeight: 64,
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
   input: {
     flex: 1,
-    backgroundColor: '#F0EDFA',
+    backgroundColor: 'transparent',
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1041,8 +1061,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#2D2B3D',
     maxHeight: 100,
-    borderWidth: 1.5,
-    borderColor: 'rgba(124,92,252,0.15)',
   },
   sendButton: {
     width: 44,
