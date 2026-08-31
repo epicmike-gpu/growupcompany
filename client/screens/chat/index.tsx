@@ -204,6 +204,10 @@ export default function ChatScreen() {
   // 而不是一次性 boolean ref（否则第二次从首页点指令进来不会再发送）
   const lastSentCommandIdRef = useRef<number | null>(null);
   const nextIdRef = useRef(0);
+  // SSE 诊断：标记本条回复是否已打印过首个中文块日志（每次新回复重置）
+  const firstContentLoggedRef = useRef(true);
+  // SSE 渲染层诊断：记录上一次打印渲染日志时的 content 内容
+  const lastRenderLogRef = useRef<string>('');
 
   // 插入一条"喝水提醒"消息（不消耗聊天次数，不走 LLM）
   const insertWaterReminder = useCallback(() => {
@@ -286,6 +290,7 @@ export default function ChatScreen() {
 
       let accumulated = '';
       let accumulatedEn = '';
+      firstContentLoggedRef.current = false;
 
       // 统一 SSE 客户端：Web 用 fetch+ReadableStream（经 Metro 代理时 XHR 会被缓冲成一次性交付，
       // 导致流式期间收不到文字、语音和文字时序错乱），原生端用 react-native-sse
@@ -309,6 +314,7 @@ export default function ChatScreen() {
         {
           onMessage: (data) => {
           if (data === '[DONE]') {
+            console.log('[SSE-DIAG] DONE zh:', accumulated.length, 'en:', accumulatedEn.length, 'tutor flag sent:', englishTutor);
             stopSse();
           setIsStreaming(false);
           // 回复结束：等最后一帧渲染完成后强制贴底，保证无需手动上滑
@@ -357,6 +363,10 @@ export default function ChatScreen() {
               // it will be revealed by typewriter AFTER the Chinese voice finishes.
             } else {
               accumulated += parsed.content;
+              if (!firstContentLoggedRef.current) {
+                firstContentLoggedRef.current = true;
+                console.log('[SSE-DIAG] first zh chunk len:', (parsed.content || '').length);
+              }
             }
             setMessages((prev) =>
               prev.map((m) =>
@@ -760,6 +770,11 @@ export default function ChatScreen() {
   };
 
   const renderMessage = ({ item }: { item: Message }) => {
+    // SSE 渲染层诊断：assistant 气泡每次 content 长度变化打印一次
+    if (item.role === 'assistant' && item.kind !== 'water' && item.content !== lastRenderLogRef.current) {
+      lastRenderLogRef.current = item.content;
+      console.log('[SSE-DIAG] render assistant content len:', (item.content || '').length);
+    }
     // 喝水提醒卡片：居中浅蓝水滴样式，非普通聊天气泡
     if (item.kind === 'water') {
       return (
