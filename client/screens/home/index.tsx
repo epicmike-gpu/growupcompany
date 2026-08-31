@@ -107,7 +107,14 @@ function SpinningSprite({ size = 36 }: { size?: number }) {
   return (
     <Animated.View
       style={[
-        { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
+        {
+          // 宽高留 18% 缓冲：FontAwesome glyph 视觉宽约 1.125em，
+          // 避免旋转透视下星角溢出容器造成缺角观感
+          width: size * 1.18,
+          height: size * 1.18,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
         spriteStyle,
       ]}
     >
@@ -342,7 +349,7 @@ export default function HomeScreen() {
                 experimentalBlurMethod={
                   Platform.OS === 'android' ? 'dimezisBlurView' : undefined
                 }
-                style={StyleSheet.absoluteFill}
+                style={[StyleSheet.absoluteFill, { borderRadius: 28 }]}
                 pointerEvents="none"
               />
               <View style={styles.glassBallTint} pointerEvents="none" />
@@ -644,7 +651,8 @@ const styles = StyleSheet.create({
   glassBall: {
     ...StyleSheet.absoluteFillObject,
     borderRadius: 28,
-    overflow: 'hidden',
+    // 不用 overflow hidden：iOS 上 UIVisualEffectView 与父级圆角裁剪组合会渲染缺角，
+    // 改为模糊层/雾层各自自带 borderRadius（原生 layer 圆角）
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.5)',
   },
@@ -655,6 +663,7 @@ const styles = StyleSheet.create({
   },
   glassBallTint: {
     ...StyleSheet.absoluteFillObject,
+    borderRadius: 28,
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
   glassBallHighlight: {
