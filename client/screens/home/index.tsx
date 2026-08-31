@@ -111,26 +111,7 @@ function SpinningSprite({ size = 36 }: { size?: number }) {
         spriteStyle,
       ]}
     >
-      {/* 厚度层：右下偏移的深琥珀色星体，形成 3D 侧壁 */}
-      <FontAwesome6
-        name="star"
-        size={size}
-        color="#C97F06"
-        solid
-        style={{ position: 'absolute', transform: [{ translateX: 2.5 }, { translateY: 3.5 }] }}
-      />
-      {/* 主星体：亮黄 + 左上高光投影 */}
-      <FontAwesome6
-        name="star"
-        size={size}
-        color="#FFD54A"
-        solid
-        style={{
-          textShadowColor: 'rgba(255,255,255,0.55)',
-          textShadowOffset: { width: -1.5, height: -2 },
-          textShadowRadius: 2.5,
-        }}
-      />
+      <FontAwesome6 name="star" size={size} color="#FFD54A" solid />
     </Animated.View>
   );
 }
