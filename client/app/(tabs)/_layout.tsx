@@ -1,27 +1,25 @@
 import { Tabs } from 'expo-router';
 import { Platform } from 'react-native';
 import { FontAwesome6 } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabLayout() {
-  let tabBarStyle = {
-    backgroundColor: '#FFFFFF',
+  const insets = useSafeAreaInsets();
+
+  let tabBarStyle: Record<string, unknown> = {
+    backgroundColor: '#F0EDFA',
     borderTopWidth: 0,
-    shadowColor: '#7C5CFC',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    height: 70,
-    paddingBottom: 8,
+    height: 70 + insets.bottom,
+    paddingBottom: 8 + insets.bottom,
     paddingTop: 8,
+    elevation: 0,
   };
 
+  // 用于修复 Web 上高度异常的问题
   if (Platform.OS === 'web') {
     tabBarStyle = {
       ...tabBarStyle,
-      height: 'auto' as unknown as number,
+      height: 'auto',
     };
   }
 
