@@ -92,7 +92,7 @@ export default function HomeScreen() {
   const remaining = profile?.messages_remaining ?? 0;
 
   return (
-    <Screen>
+    <Screen backgroundColor="#F0EDFA">
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}

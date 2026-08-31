@@ -816,9 +816,17 @@ export default function ChatScreen() {
                   />
                 </TouchableOpacity>
               </Animated.View>
-              <Text style={styles.voiceHint}>
-                {isRecording ? '松开结束录音' : '按住说话'}
-              </Text>
+              <TouchableOpacity
+                style={styles.voiceHint}
+                activeOpacity={0.6}
+                onPressIn={startRecording}
+                onPressOut={stopRecording}
+                disabled={isStreaming}
+              >
+                <Text style={styles.voiceHintText}>
+                  {isRecording ? '松开结束录音' : '按住说话'}
+                </Text>
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.modeToggleButton}
                 onPress={() => setInputMode('text')}
@@ -1015,12 +1023,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingTop: 12,
+    paddingBottom: 20,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#EDE8FF',
     gap: 12,
-    minHeight: 64,
+    minHeight: 84,
   },
   input: {
     flex: 1,
@@ -1084,8 +1093,13 @@ const styles = StyleSheet.create({
   },
   voiceHint: {
     flex: 1,
-    textAlign: 'center',
-    fontSize: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 22,
+    borderRadius: 18,
+  },
+  voiceHintText: {
+    fontSize: 14,
     fontWeight: '600',
     color: '#8B87A0',
   },
