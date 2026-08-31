@@ -23,6 +23,25 @@ interface UserProfile {
   messages_remaining: number;
 }
 
+// 服务端文件：server/src/routes/tasks.ts
+// 接口：GET /api/v1/tasks/recommended
+// Query 参数：age?: number（孩子年龄，来自 profile.age，缺省按全年龄段推荐）
+interface RecommendedTask {
+  type: string;
+  label: string;
+  icon: string;
+  color: string;
+  bg: string;
+  shadow: string;
+  reason: string;
+}
+
+interface RecommendedData {
+  timeSlot: string;
+  slotGreeting: string;
+  tasks: RecommendedTask[];
+}
+
 const COMMANDS = [
   { type: 'drink_water', label: '喝水', icon: 'glass-water', color: '#4FC3F7', bg: '#E3F6FD', shadow: '#4FC3F7' },
   { type: 'sleep', label: '睡觉', icon: 'moon', color: '#7C5CFC', bg: '#EDE8FF', shadow: '#7C5CFC' },
@@ -40,6 +59,7 @@ export default function HomeScreen() {
   const router = useSafeRouter();
   const { session } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [recommended, setRecommended] = useState<RecommendedData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async () => {
@@ -61,10 +81,26 @@ export default function HomeScreen() {
     }
   }, [session]);
 
+  const fetchRecommended = useCallback(async (age: number | null) => {
+    try {
+      const query = age ? `?age=${age}` : '';
+      const response = await fetch(
+        `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/tasks/recommended${query}`
+      );
+      if (response.ok) {
+        const data: RecommendedData = await response.json();
+        setRecommended(data);
+      }
+    } catch (error) {
+      console.error('Fetch recommended error:', error);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
-    }, [fetchProfile])
+      fetchRecommended(profile?.age ?? null);
+    }, [fetchProfile, fetchRecommended, profile?.age])
   );
 
   const handleCommand = (commandType: string) => {
@@ -120,6 +156,44 @@ export default function HomeScreen() {
           <Text style={styles.heroTitle}>成长陪伴精灵</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
         </View>
+
+        {/* Recommended Tasks */}
+        {recommended && recommended.tasks.length > 0 && (
+          <View style={styles.recommendSection}>
+            <View style={styles.recommendHeader}>
+              <FontAwesome6 name="wand-magic-sparkles" size={16} color="#7C5CFC" solid />
+              <Text style={styles.recommendTitle}>今日推荐</Text>
+              <Text style={styles.recommendGreeting} numberOfLines={1}>
+                {recommended.slotGreeting}
+              </Text>
+            </View>
+            <View style={styles.recommendRow}>
+              {recommended.tasks.map((task) => (
+                <TouchableOpacity
+                  key={`${task.type}-${task.label}`}
+                  style={[styles.recommendCard, { backgroundColor: task.bg, shadowColor: task.shadow }]}
+                  onPress={() => handleCommand(task.type)}
+                  activeOpacity={0.8}
+                >
+                  <View
+                    style={[
+                      styles.recommendIcon,
+                      { backgroundColor: '#FFFFFF' },
+                    ]}
+                  >
+                    <FontAwesome6 name={task.icon} size={20} color={task.color} solid />
+                  </View>
+                  <View style={styles.recommendText}>
+                    <Text style={[styles.recommendTaskName, { color: task.color }]}>{task.label}</Text>
+                    <Text style={styles.recommendReason} numberOfLines={2}>
+                      {task.reason}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
 
         {/* Command Grid */}
         <Text style={styles.sectionTitle}>选择任务</Text>
@@ -278,6 +352,68 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#2D2B3D',
     marginBottom: 16,
+  },
+  recommendSection: {
+    marginBottom: 28,
+  },
+  recommendHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  recommendTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#2D2B3D',
+  },
+  recommendGreeting: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8B87A0',
+    textAlign: 'right',
+  },
+  recommendRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  recommendCard: {
+    flex: 1,
+    borderRadius: 24,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.7)',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  recommendIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.8)',
+  },
+  recommendText: {
+    flex: 1,
+  },
+  recommendTaskName: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  recommendReason: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#6B6780',
+    marginTop: 4,
+    lineHeight: 15,
   },
   commandGrid: {
     flexDirection: 'row',
