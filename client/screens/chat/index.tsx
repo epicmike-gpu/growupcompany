@@ -148,7 +148,11 @@ function TTSPlayer({
 
 export default function ChatScreen() {
   const { session } = useAuth();
-  const { command_type, commandId } = useSafeSearchParams<{ command_type: string; commandId?: number }>();
+  const { command_type, commandId, commandText: commandTextParam } = useSafeSearchParams<{
+    command_type: string;
+    commandId?: number;
+    commandText?: string;
+  }>();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -507,7 +511,9 @@ export default function ChatScreen() {
     if (typeof commandId !== 'number') return;
     if (lastSentCommandIdRef.current === commandId) return;
     lastSentCommandIdRef.current = commandId;
-    const commandText = PRAISE_COMMAND_TEXT[command_type] || `请提醒我去${commandLabel}`;
+    // 新指令库（100 种）由首页直接传完整话术；旧入口走本地映射兜底
+    const commandText =
+      commandTextParam || PRAISE_COMMAND_TEXT[command_type] || `请提醒我去${commandLabel}`;
     handleSendMessage(commandText, command_type);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commandId]);

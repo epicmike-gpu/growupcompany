@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
@@ -34,6 +35,7 @@ interface RecommendedTask {
   bg: string;
   shadow: string;
   reason: string;
+  command?: string;
 }
 
 interface RecommendedData {
@@ -42,28 +44,32 @@ interface RecommendedData {
   tasks: RecommendedTask[];
 }
 
-const COMMANDS = [
-  { type: 'drink_water', label: '喝水', icon: 'glass-water', color: '#4FC3F7', bg: '#E3F6FD', shadow: '#4FC3F7' },
-  { type: 'sleep', label: '睡觉', icon: 'moon', color: '#7C5CFC', bg: '#EDE8FF', shadow: '#7C5CFC' },
-  { type: 'rest', label: '休息', icon: 'couch', color: '#FF8FAB', bg: '#FFE8EE', shadow: '#FF8FAB' },
-  { type: 'bath', label: '洗澡', icon: 'bath', color: '#26C6DA', bg: '#E0F7FA', shadow: '#26C6DA' },
-  { type: 'eat_vegetables', label: '吃蔬菜', icon: 'carrot', color: '#5ED6A0', bg: '#E0F8EC', shadow: '#5ED6A0' },
-  { type: 'brush_teeth', label: '刷牙', icon: 'tooth', color: '#FFCB57', bg: '#FFF4DD', shadow: '#FFCB57' },
-  { type: 'exercise', label: '运动', icon: 'dumbbell', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' },
-  { type: 'study', label: '学习', icon: 'book', color: '#AB47BC', bg: '#F3E5F5', shadow: '#AB47BC' },
-  // 生活习惯类
-  { type: 'dress_up', label: '自己穿衣', icon: 'shirt', color: '#FFA726', bg: '#FFF3E0', shadow: '#FFA726' },
-  { type: 'pack_bag', label: '收拾书包', icon: 'bag-shopping', color: '#8D6E63', bg: '#F1EAE4', shadow: '#8D6E63' },
-  { type: 'wash_hands', label: '饭前洗手', icon: 'pump-soap', color: '#4DD0E1', bg: '#E0F7FA', shadow: '#4DD0E1' },
-  { type: 'nap', label: '午睡', icon: 'bed', color: '#9575CD', bg: '#EDE7F6', shadow: '#9575CD' },
-  // 健康身体类
-  { type: 'eat_fruit', label: '吃水果', icon: 'apple-whole', color: '#EF5350', bg: '#FFEBEE', shadow: '#EF5350' },
-  { type: 'sit_straight', label: '坐姿端正', icon: 'chair', color: '#66BB6A', bg: '#E8F5E9', shadow: '#66BB6A' },
-  { type: 'breathe', label: '深呼吸', icon: 'wind', color: '#4FC3F7', bg: '#E3F6FD', shadow: '#4FC3F7' },
-  // 赞美类
-  { type: 'praise_day', label: '今天真棒', icon: 'thumbs-up', color: '#FFD54F', bg: '#FFF8E1', shadow: '#FFD54F' },
-  { type: 'strength', label: '优点大发现', icon: 'medal', color: '#F06292', bg: '#FCE4EC', shadow: '#F06292' },
-];
+// 服务端文件：server/src/routes/tasks.ts
+// 接口：GET /api/v1/tasks/library
+// Query 参数：无（全量拉取 100 条，搜索/分类在前端本地过滤）
+interface LibraryCategory {
+  key: string;
+  label: string;
+  icon: string;
+  count: number;
+}
+
+interface LibraryTask {
+  type: string;
+  label: string;
+  icon: string;
+  category: string;
+  color: string;
+  bg: string;
+  shadow: string;
+  command: string;
+  reason: string;
+}
+
+interface LibraryData {
+  categories: LibraryCategory[];
+  tasks: LibraryTask[];
+}
 
 const LEARN_CARD = { label: '学英语', icon: 'graduation-cap', color: '#FF7043', bg: '#FFF0EC', shadow: '#FF7043' };
 
@@ -72,6 +78,9 @@ export default function HomeScreen() {
   const { session } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [recommended, setRecommended] = useState<RecommendedData | null>(null);
+  const [library, setLibrary] = useState<LibraryData | null>(null);
+  const [searchText, setSearchText] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all');
   const [loading, setLoading] = useState(true);
 
   const fetchProfile = useCallback(async () => {
@@ -108,16 +117,36 @@ export default function HomeScreen() {
     }
   }, []);
 
+  const fetchLibrary = useCallback(async () => {
+    try {
+      const response = await fetch(
+        `${EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/tasks/library`
+      );
+      if (response.ok) {
+        const data: LibraryData = await response.json();
+        setLibrary(data);
+      }
+    } catch (error) {
+      console.error('Fetch library error:', error);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchProfile();
       fetchRecommended(profile?.age ?? null);
-    }, [fetchProfile, fetchRecommended, profile?.age])
+      fetchLibrary();
+    }, [fetchProfile, fetchRecommended, fetchLibrary, profile?.age])
   );
 
-  const handleCommand = (commandType: string) => {
+  const handleCommand = (task: { type: string; command: string }) => {
     // commandId: 唯一标识本次指令进入，聊天页据此判断是否需要发送初始指令消息
-    const payload = { command_type: commandType, commandId: Date.now() };
+    // commandText: 完整指令话术（赞美类与普通提醒话术不同），聊天页优先使用
+    const payload = {
+      command_type: task.type,
+      commandText: task.command,
+      commandId: Date.now(),
+    };
     // navigate 到 tab 内页面语义更正确；冷启动后导航树刚就绪的瞬间 push 事件可能被丢弃，
     // 延迟重试一次兜底（两次携带相同 commandId，聊天页不会重复发送指令）
     router.navigate('/chat', payload);
@@ -125,6 +154,14 @@ export default function HomeScreen() {
       router.navigate('/chat', payload);
     }, 250);
   };
+
+  // 搜索 + 分类本地过滤（library 全量仅 100 条，本地过滤即时响应）
+  const filteredTasks: LibraryTask[] = (library?.tasks ?? []).filter((t) => {
+    if (activeCategory !== 'all' && t.category !== activeCategory) return false;
+    const q = searchText.trim().toLowerCase();
+    if (!q) return true;
+    return t.label.toLowerCase().includes(q) || t.type.toLowerCase().includes(q);
+  });
 
   if (loading) {
     return (
@@ -184,7 +221,12 @@ export default function HomeScreen() {
                 <TouchableOpacity
                   key={`${task.type}-${task.label}`}
                   style={[styles.recommendCard, { backgroundColor: task.bg, shadowColor: task.shadow }]}
-                  onPress={() => handleCommand(task.type)}
+                  onPress={() =>
+                  handleCommand({
+                    type: task.type,
+                    command: task.command ?? `请提醒我去${task.label}`,
+                  })
+                }
                   activeOpacity={0.8}
                 >
                   <View
@@ -208,13 +250,89 @@ export default function HomeScreen() {
         )}
 
         {/* Command Grid */}
-        <Text style={styles.sectionTitle}>选择任务</Text>
+        {/* 搜索栏 */}
+        <View style={styles.searchBar}>
+          <FontAwesome6 name="magnifying-glass" size={16} color="#9A8FC7" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="搜索任务，如：喝水、刷牙"
+            placeholderTextColor="#B5AEDB"
+            value={searchText}
+            onChangeText={setSearchText}
+            returnKeyType="search"
+            clearButtonMode="while-editing"
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setSearchText('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <FontAwesome6 name="circle-xmark" size={16} color="#B5AEDB" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* 分类筛选 chips */}
+        {!searchText && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoryScroll}
+            contentContainerStyle={styles.categoryContent}
+          >
+            <TouchableOpacity
+              style={[
+                styles.categoryChip,
+                activeCategory === 'all' && styles.categoryChipActive,
+              ]}
+              onPress={() => setActiveCategory('all')}
+              activeOpacity={0.7}
+            >
+              <Text
+                style={[
+                  styles.categoryChipText,
+                  activeCategory === 'all' && styles.categoryChipTextActive,
+                ]}
+              >
+                全部
+              </Text>
+            </TouchableOpacity>
+            {(library?.categories ?? []).map((cat) => (
+              <TouchableOpacity
+                key={cat.key}
+                style={[
+                  styles.categoryChip,
+                  activeCategory === cat.key && styles.categoryChipActive,
+                ]}
+                onPress={() => setActiveCategory(cat.key)}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.categoryChipText,
+                    activeCategory === cat.key && styles.categoryChipTextActive,
+                  ]}
+                >
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+
+        <Text style={styles.sectionTitle}>
+          {searchText
+            ? `搜索结果 (${filteredTasks.length})`
+            : activeCategory === 'all'
+              ? '选择任务'
+              : `${(library?.categories ?? []).find((c) => c.key === activeCategory)?.label ?? ''}任务`}
+        </Text>
         <View style={styles.commandGrid}>
-          {COMMANDS.map((cmd) => (
+          {filteredTasks.map((cmd) => (
             <TouchableOpacity
               key={cmd.type}
               style={[styles.commandCard, { backgroundColor: cmd.bg }]}
-              onPress={() => handleCommand(cmd.type)}
+              onPress={() => handleCommand(cmd)}
               activeOpacity={0.8}
             >
               <View
@@ -231,12 +349,21 @@ export default function HomeScreen() {
               <Text style={[styles.commandLabel, { color: cmd.color }]}>{cmd.label}</Text>
             </TouchableOpacity>
           ))}
+          {filteredTasks.length === 0 && (
+            <View style={styles.emptyResult}>
+              <FontAwesome6 name="face-frown" size={36} color="#C9C2E8" />
+              <Text style={styles.emptyResultText}>没有找到「{searchText}」相关任务</Text>
+              <Text style={styles.emptyResultHint}>换个词试试，或看看其他分类</Text>
+            </View>
+          )}
         </View>
 
         {/* Free Chat */}
         <TouchableOpacity
           style={[styles.freeChatCard, styles.actionCard]}
-          onPress={() => handleCommand('free_chat')}
+          onPress={() =>
+            handleCommand({ type: 'free_chat', command: '我们一起聊聊天吧' })
+          }
           activeOpacity={0.8}
         >
           <View style={styles.freeChatIcon}>
@@ -433,6 +560,90 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 28,
     gap: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#E2DAFF',
+    shadowColor: '#7C5CFC',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#4A3F78',
+    padding: 0,
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  categoryScroll: {
+    marginBottom: 14,
+  },
+  categoryScrollContent: {
+    gap: 8,
+    paddingRight: 20,
+  },
+  categoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2DAFF',
+  },
+  categoryChipActive: {
+    backgroundColor: '#7C5CFC',
+    borderColor: '#7C5CFC',
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8A7BB8',
+  },
+  categoryChipTextActive: {
+    color: '#FFFFFF',
+  },
+  noResult: {
+    alignItems: 'center',
+    paddingVertical: 30,
+    gap: 8,
+  },
+  noResultText: {
+    fontSize: 14,
+    color: '#A99BC9',
+  },
+  categoryContent: {
+    paddingHorizontal: 20,
+    gap: 8,
+    alignItems: 'center',
+  },
+  emptyResult: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 6,
+  },
+  emptyResultText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#8A82A8',
+  },
+  emptyResultHint: {
+    fontSize: 12,
+    color: '#B4AECB',
   },
   commandCard: {
     width: '47%',
