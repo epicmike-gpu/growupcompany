@@ -199,11 +199,15 @@ export default function EnglishScreen() {
   // 渲染主题选择
   const renderThemeSelection = () => (
     <View style={styles.content}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('age')}>
-        <FontAwesome6 name="arrow-left" size={20} color="#7C5CFC" />
-      </TouchableOpacity>
-      <Text style={styles.title}>选择主题</Text>
-      <Text style={styles.subtitle}>{ageGroups.find((a) => a.key === ageGroup)?.label}</Text>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('age')}>
+          <FontAwesome6 name="arrow-left" size={20} color="#7C5CFC" />
+        </TouchableOpacity>
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>选择主题</Text>
+          <Text style={styles.subtitle}>{ageGroups.find((a) => a.key === ageGroup)?.label}</Text>
+        </View>
+      </View>
       <View style={styles.themeList}>
         {Object.entries(themes).map(([key, info]) => (
           <TouchableOpacity
@@ -229,11 +233,15 @@ export default function EnglishScreen() {
   // 渲染关卡选择
   const renderLevelSelection = () => (
     <View style={styles.content}>
-      <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('theme')}>
-        <FontAwesome6 name="arrow-left" size={20} color="#7C5CFC" />
-      </TouchableOpacity>
-      <Text style={styles.title}>选择关卡</Text>
-      <Text style={styles.subtitle}>{themes[theme]?.label}主题</Text>
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.backBtn} onPress={() => setScreen('theme')}>
+          <FontAwesome6 name="arrow-left" size={20} color="#7C5CFC" />
+        </TouchableOpacity>
+        <View style={styles.titleWrap}>
+          <Text style={styles.title}>选择关卡</Text>
+          <Text style={styles.subtitle}>{themes[theme]?.label}主题</Text>
+        </View>
+      </View>
       <View style={styles.levelList}>
         {levels.map((lvl) => (
           <TouchableOpacity
@@ -388,7 +396,16 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 24,
-    paddingTop: 60,
+    paddingTop: 16,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    marginBottom: 24,
+  },
+  titleWrap: {
+    flex: 1,
   },
   title: {
     fontSize: 28,
@@ -403,9 +420,6 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   backBtn: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
