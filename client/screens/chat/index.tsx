@@ -752,7 +752,8 @@ export default function ChatScreen() {
           keyExtractor={(item) => item.id}
           style={styles.messagesList}
           contentContainerStyle={styles.messagesContent}
-          onContentSizeChange={() => flatListRef.current?.scrollToEnd()}
+          onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: true })}
+          onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
           showsVerticalScrollIndicator={false}
         />
 
@@ -813,7 +814,7 @@ export default function ChatScreen() {
                   >
                     <FontAwesome6
                       name="microphone"
-                      size={28}
+                      size={22}
                       color={isRecording ? '#FFFFFF' : '#7C5CFC'}
                       solid
                     />
@@ -947,7 +948,8 @@ const styles = StyleSheet.create({
   },
   messagesContent: {
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 16,
+    paddingBottom: 12,
     gap: 16,
   },
   messageRow: {
@@ -1026,11 +1028,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 16,
+    paddingTop: 6,
+    paddingBottom: 10,
     backgroundColor: '#F0EDFA',
     gap: 10,
-    minHeight: 80,
+    minHeight: 64,
   },
   voiceBar: {
     flex: 1,
@@ -1038,12 +1040,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: '#FFFFFF',
-    borderRadius: 24,
+    borderRadius: 22,
     borderWidth: 2,
     borderColor: '#E2DAFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    minHeight: 64,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    minHeight: 52,
     shadowColor: '#7C5CFC',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
@@ -1054,17 +1056,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
     borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     fontSize: 15,
     fontWeight: '500',
     color: '#2D2B3D',
     maxHeight: 100,
   },
   sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#7C5CFC',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1078,9 +1080,9 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   modeToggleButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#EDE8FF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1090,9 +1092,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   voiceButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#EDE8FF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1112,8 +1114,8 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 22,
-    borderRadius: 18,
+    paddingVertical: 18,
+    borderRadius: 16,
   },
   voiceHintText: {
     fontSize: 14,
