@@ -160,7 +160,12 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
     res.setHeader('Connection', 'keep-alive');
 
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    // OpenAI 兼容协议客户端：通过 OPENAI_BASE_URL 可切换到任意兼容厂商
+    // （如豆包 Ark: https://ark.cn-beijing.volces.com/api/v3，配 LLM_MODEL=豆包模型/接入点ID）
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.OPENAI_BASE_URL || undefined,
+    });
 
     const llmMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemPrompt },
