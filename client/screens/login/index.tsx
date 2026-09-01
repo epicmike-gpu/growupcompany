@@ -15,12 +15,13 @@ import { Screen } from '@/components/Screen';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSafeRouter } from '@/hooks/useSafeRouter';
 import Toast from 'react-native-toast-message';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 const APP_ICON = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-08-16/7674509627962163263_1786863217.png?sign=4908927271-aa980cca83-0-646b6e68e1f94d1f4209f0d945cf92ea5f18018150474527db0b422964fd3680';
 const APP_NAME = '成长陪伴精灵App';
 
 export default function LoginScreen() {
-  const { signInWithOtp, verifyOtp, signInAsGuest, isAuthenticated } = useAuth();
+  const { signInWithOtp, verifyOtp, signInAsGuest, signInWithApple, isAuthenticated } = useAuth();
   const router = useSafeRouter();
 
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
@@ -29,6 +30,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   const otpRefs = useRef<(TextInput | null)[]>([]);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -38,6 +41,25 @@ export default function LoginScreen() {
       router.replace('/');
     }
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync()
+        .then(setAppleAvailable)
+        .catch(() => setAppleAvailable(false));
+    }
+  }, []);
+
+  const handleAppleLogin = async () => {
+    if (appleLoading) return;
+    setAppleLoading(true);
+    const result = await signInWithApple();
+    setAppleLoading(false);
+    if (result.error) {
+      Toast.show({ type: 'error', text1: result.error });
+    }
+    // 成功跳转由 isAuthenticated effect 处理
+  };
 
   useEffect(() => {
     if (countdown > 0) {
@@ -231,6 +253,19 @@ export default function LoginScreen() {
             )}
           </View>
 
+          {/* Apple 登录（仅 iOS） */}
+          {appleAvailable && (
+            <View style={[styles.appleButtonWrapper, appleLoading && { opacity: 0.6 }]}>
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+                cornerRadius={28}
+                style={styles.appleButton}
+                onPress={handleAppleLogin}
+              />
+            </View>
+          )}
+
           {/* 测试阶段：跳过登录 */}
           <TouchableOpacity
             style={styles.skipButton}
@@ -250,6 +285,15 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
+  appleButtonWrapper: {
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  appleButton: {
+    width: '100%',
+    height: 56,
+  },
+
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,

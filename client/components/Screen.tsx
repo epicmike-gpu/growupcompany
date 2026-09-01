@@ -105,15 +105,18 @@ const KeyboardAwareScrollable = ({
   const commonProps = {
     ...childAttrs,
     contentContainerStyle: enhancedContentStyle,
-    keyboardShouldPersistTaps: childAttrs['keyboardShouldPersistTaps'] ?? 'handled',
-    keyboardDismissMode: childAttrs['keyboardDismissMode'] ?? 'on-drag',
+    keyboardShouldPersistTaps: (childAttrs['keyboardShouldPersistTaps'] ?? 'handled') as 'handled' | 'never',
+    keyboardDismissMode: (childAttrs['keyboardDismissMode'] ?? 'on-drag') as 'none' | 'on-drag' | 'interactive',
     enableOnAndroid: true,
     // 类似于原代码中的 setTimeout/scrollToEnd 逻辑，这里设置额外的滚动高度确保输入框可见
     extraHeight: 100,
     // 禁用自带的 ScrollView 自动 inset，由外部 padding 控制
     enableAutomaticScroll: true,
     ...(Platform.OS === 'ios'
-      ? { contentInsetAdjustmentBehavior: childAttrs['contentInsetAdjustmentBehavior'] ?? contentInsetBehaviorIOS }
+      ? {
+          contentInsetAdjustmentBehavior: (childAttrs['contentInsetAdjustmentBehavior'] ??
+            contentInsetBehaviorIOS) as 'automatic' | 'scrollableAxes' | 'never' | 'always',
+        }
       : {}),
   };
 

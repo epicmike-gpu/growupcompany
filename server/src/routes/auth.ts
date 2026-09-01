@@ -60,4 +60,92 @@ router.post('/guest', async (_req: Request, res: Response) => {
   }
 });
 
+/**
+ * POST /api/v1/auth/merge-guest
+ * 将游客/匿名账号的数据迁移到当前正式登录账号（Apple 登录等）
+ * Header 参数：Authorization: Bearer <access_token>
+ * Body 参数：oldUserId: string（游客账号的 user id）
+ * 返回：{ merged: boolean, moved: Record<string, number> }
+ */
+router.post('/merge-guest', async (req: Request, res: Response) => {
+  try {
+    // 1. 鉴权：从 Bearer token 解析当前正式账号
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+    if (!token) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const userClient = getSupabaseClient(token);
+    const { data: userData, error: userError } = await userClient.auth.getUser();
+    if (userError || !userData?.user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const newUserId = userData.user.id;
+
+    // 2. 参数校验
+    const oldUserId = String(req.body?.oldUserId || '');
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(oldUserId)) {
+      res.status(400).json({ error: 'oldUserId must be a valid uuid' });
+      return;
+    }
+    if (oldUserId === newUserId) {
+      res.json({ merged: false, reason: 'same-user' });
+      return;
+    }
+
+    // 3. 安全校验：旧账号必须是游客（匿名账号或测试游客），防止越权吞并他人正式账号
+    const adminClient = getSupabaseClient();
+    const { data: oldUser } = await adminClient.auth.admin.getUserById(oldUserId);
+    const oldEmail = String((oldUser?.user as any)?.email || '');
+    const oldIsAnonymous = (oldUser?.user as any)?.is_anonymous === true;
+    const isGuestAccount = oldUser?.user && (oldIsAnonymous || oldEmail.endsWith('@kidx-test.local'));
+    if (!isGuestAccount) {
+      res.status(400).json({ error: 'oldUserId is not a guest account' });
+      return;
+    }
+
+    // 4. 数据迁移：聊天记录 + IAP 订单
+    const moved: Record<string, number> = {};
+    for (const table of ['chat_messages', 'iap_orders']) {
+      const { data: updatedRows, error } = await adminClient
+        .from(table)
+        .update({ user_id: newUserId })
+        .eq('user_id', oldUserId)
+        .select('id');
+      if (error) {
+        console.error(`Merge ${table} error:`, error);
+        res.status(500).json({ error: `Failed to merge ${table}` });
+        return;
+      }
+      moved[table] = updatedRows?.length ?? 0;
+    }
+
+    // 5. user_profiles 迁移（有 UNIQUE 约束，冲突时保留新账号自己的 profile 并删除旧 profile）
+    const { error: profileError } = await adminClient
+      .from('user_profiles')
+      .update({ user_id: newUserId })
+      .eq('user_id', oldUserId);
+    if (profileError) {
+      if ((profileError as any).code === '23505') {
+        await adminClient.from('user_profiles').delete().eq('user_id', oldUserId);
+        moved['user_profiles'] = 0;
+      } else {
+        console.error('Merge user_profiles error:', profileError);
+        res.status(500).json({ error: 'Failed to merge user_profiles' });
+        return;
+      }
+    } else {
+      moved['user_profiles'] = 1;
+    }
+
+    res.json({ merged: true, moved });
+  } catch (error) {
+    console.error('Merge guest error:', error);
+    res.status(500).json({ error: 'Merge guest failed' });
+  }
+});
+
 export default router;

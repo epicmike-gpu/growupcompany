@@ -16,7 +16,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "entitlements": {
+        "com.apple.developer.applesignin": "Default"
+      }
     },
     "android": {
       "adaptiveIcon": {
