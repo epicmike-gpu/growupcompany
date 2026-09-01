@@ -106,3 +106,4 @@ node-compile-cache/
 
 # Vercel 构建产物
 api/index.js
+assets/image_*.png
