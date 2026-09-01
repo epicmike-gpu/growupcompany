@@ -17,6 +17,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.growupcompany.app",
       "entitlements": {
         "com.apple.developer.applesignin": "Default"
       }
@@ -26,7 +27,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": `com.anonymous.x${projectId || '0'}`
+      "package": "com.growupcompany.app"
     },
     "web": {
       "bundler": "metro",
