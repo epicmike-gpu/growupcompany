@@ -129,11 +129,14 @@ const KeyboardAwareScrollable = ({
   }
 
   if (t === FlatList) {
-    return <KeyboardAwareFlatList {...commonProps} />;
+    // 类型断言：KeyboardAwareFlatList 要求 data/renderItem，但此处仅透传 ScrollView 增强属性
+    const ListComp = KeyboardAwareFlatList as unknown as React.ComponentType<any>;
+    return <ListComp {...commonProps} />;
   }
 
   if (t === SectionList) {
-    return <KeyboardAwareSectionList {...commonProps} />;
+    const ListComp = KeyboardAwareSectionList as unknown as React.ComponentType<any>;
+    return <ListComp {...commonProps} />;
   }
 
   // 理论上不应运行到这里，如果是非标准组件则原样返回，仅修改样式

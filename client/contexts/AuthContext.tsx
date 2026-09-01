@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import Crypto from 'expo-crypto';
+import * as Crypto from 'expo-crypto';
 import { initSupabaseClient, getSupabaseClient, clearSupabaseClient } from '@/lib/supabase';
 
 interface AuthContextType {
