@@ -38,7 +38,8 @@ async function authMiddleware(req: Request, res: Response, next: Function) {
 
 const VOLC_TTS2_URL = 'https://openspeech.bytedance.com/api/v3/tts/unidirectional';
 const VOLC_TTS2_RESOURCE = 'seed-tts-2.0'; // 豆包语音合成大模型 2.0
-const VOLC_AUC_URL = 'https://openspeech.bytedance.com/api/v1/auc';
+const VOLC_ASR2_URL = 'https://openspeech.bytedance.com/api/v3/auc/bigmodel';
+const VOLC_ASR2_RESOURCE = 'volc.seedasr.auc'; // 豆包录音文件识别大模型 2.0
 
 /**
  * TTS 2.0 鉴权双轨：
@@ -58,13 +59,38 @@ function getTts2Auth(): Record<string, string> {
   throw new Error('TTS 凭据未配置：请在 Vercel 设置 VOLC_API_KEY（新版单Key）或 VOLC_APP_ID + VOLC_ACCESS_TOKEN（旧版）');
 }
 
-function getVolcCredentials() {
+/**
+ * ASR 2.0 鉴权双轨（豆包录音文件识别大模型 2.0）：
+ * - 新版控制台：单 API Key（X-Api-Key）→ VOLC_API_KEY
+ * - 旧版应用：AppID + Access Token → VOLC_APP_ID / VOLC_ACCESS_TOKEN
+ *   （注意：ASR 旧版 Header 名为 X-Api-App-Key，与 TTS 旧版的 X-Api-App-Id 不同）
+ */
+function getAsrAuth(): Record<string, string> {
+  const apiKey = process.env.VOLC_API_KEY;
+  if (apiKey) {
+    return { 'X-Api-Key': apiKey };
+  }
   const appId = process.env.VOLC_APP_ID;
   const accessToken = process.env.VOLC_ACCESS_TOKEN;
-  if (!appId || !accessToken) {
-    throw new Error('VOLC_APP_ID / VOLC_ACCESS_TOKEN is not configured');
+  if (appId && accessToken) {
+    return { 'X-Api-App-Key': appId, 'X-Api-Access-Key': accessToken };
   }
-  return { appId, accessToken };
+  throw new Error('ASR 凭据未配置：请在 Vercel 设置 VOLC_API_KEY（新版单Key）或 VOLC_APP_ID + VOLC_ACCESS_TOKEN（旧版）');
+}
+
+/**
+ * 按上传 mimetype 映射大模型录音识别的 format：
+ * 支持 raw / wav / mp3 / ogg / pcm / spx / amr / aac / m4a
+ * （Expo Go / iOS Safari 录音为 audio/mp4|m4a；Android Chrome 可能为 audio/webm）
+ */
+function mapAudioFormat(mime?: string): { format: string; codec?: string } {
+  const m = (mime || '').toLowerCase();
+  if (m.includes('mp4') || m.includes('m4a') || m.includes('aac')) return { format: 'm4a' };
+  if (m.includes('wav')) return { format: 'wav' };
+  if (m.includes('mpeg') || m.includes('mp3')) return { format: 'mp3' };
+  // webm/ogg 容器内通常为 opus 编码，按 ogg(opus) 提交
+  if (m.includes('webm') || m.includes('ogg') || m.includes('opus')) return { format: 'ogg', codec: 'opus' };
+  return { format: 'm4a' }; // 前端 createFormDataFile 固定 audio/m4a
 }
 
 /**
@@ -85,7 +111,8 @@ router.get('/status', (_req: Request, res: Response) => {
     volcAppId: mask(process.env.VOLC_APP_ID),
     volcAccessToken: mask(process.env.VOLC_ACCESS_TOKEN),
     ttsVoice: process.env.TTS_VOICE || 'MISSING(必填：2.0音色库音色ID)',
-    asrCluster: process.env.ASR_CLUSTER || 'volcano_auc(default)',
+    asrAuthMode: process.env.VOLC_API_KEY ? 'api-key(新版)' : (process.env.VOLC_APP_ID && process.env.VOLC_ACCESS_TOKEN ? 'appid+token(旧版)' : 'MISSING'),
+    asrResource: 'volc.seedasr.auc(豆包录音识别2.0)',
     llmBaseUrl: process.env.OPENAI_BASE_URL || 'ark-default',
     llmModel: process.env.LLM_MODEL || 'default',
     llmApiKey: process.env.OPENAI_API_KEY ? `set(len=${process.env.OPENAI_API_KEY.length})` : 'MISSING',
@@ -191,15 +218,16 @@ router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/voice/asr
- * Speech Recognition: convert audio to text (火山录音文件识别极速版)
+ * Speech Recognition: convert audio to text (豆包录音文件识别大模型 2.0, volc.seedasr.auc)
  *
- * 流程：m4a buffer → Supabase Storage（签名 URL）→ submit 任务 → 轮询 query → text
- * （前端录音为 m4a/mp4 容器，大模型 ASR 不支持，极速版 format:'mp4' 支持）
+ * 流程：m4a buffer → Supabase Storage（签名 URL）→ submit 任务(task_id=X-Api-Request-Id)
+ *       → 轮询 query(body 为空 {}，同一个 X-Api-Request-Id) → result.text
+ * 大模型 2.0 原生支持 m4a（无需再标 mp4 容器）
  *
  * 服务端文件：server/src/routes/voice.ts
  * 接口：POST /api/v1/voice/asr
  * Headers: x-session: string
- * Body: FormData with 'audio' file (m4a/mp4)
+ * Body: FormData with 'audio' file (m4a/mp4/webm/ogg)
  */
 router.post('/asr', authMiddleware, upload.single('audio'), async (req: Request, res: Response) => {
   const uploadedPath: string | null = `asr/${randomUUID()}.m4a`;
@@ -209,12 +237,9 @@ router.post('/asr', authMiddleware, upload.single('audio'), async (req: Request,
       return;
     }
 
-    const { buffer } = req.file;
-    const { appId, accessToken } = getVolcCredentials();
-    const cluster = process.env.ASR_CLUSTER;
-    if (!cluster) {
-      throw new Error('ASR_CLUSTER is not configured');
-    }
+    const { buffer, mimetype } = req.file;
+    const asrAuth = getAsrAuth();
+    const { format, codec } = mapAudioFormat(mimetype);
 
     // 1. 上传音频到 Supabase Storage，生成短时效签名 URL 供火山下载
     const admin = getSupabaseClient(); // service role：绕过 RLS 上传音频
@@ -230,7 +255,7 @@ router.post('/asr', authMiddleware, upload.single('audio'), async (req: Request,
 
     const { error: upErr } = await admin.storage
       .from(bucket)
-      .upload(uploadedPath, buffer, { contentType: 'audio/mp4', upsert: true });
+      .upload(uploadedPath, buffer, { contentType: mimetype || 'audio/mp4', upsert: true });
     if (upErr) {
       throw new Error(`upload audio failed: ${upErr.message}`);
     }
@@ -242,63 +267,73 @@ router.post('/asr', authMiddleware, upload.single('audio'), async (req: Request,
       throw new Error(`createSignedUrl failed: ${signErr?.message || 'no url'}`);
     }
 
-    // 2. 提交识别任务（format mp4 = m4a 容器）
+    // 2. 提交识别任务：X-Api-Request-Id 即 task_id，提交与查询共用
+    const taskId = randomUUID();
     const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer; ${accessToken}`,
+      ...asrAuth,
+      'X-Api-Resource-Id': VOLC_ASR2_RESOURCE,
+      'X-Api-Request-Id': taskId,
+      'X-Api-Sequence': '-1',
     };
     const submitBody = {
-      app: { appid: appId, token: accessToken, cluster },
-      user: { uid: (req as any).userId || 'kidx-user' },
-      audio: { format: 'mp4', url: signed.signedUrl },
-      additions: { with_speaker_info: 'False' },
+      user: { uid: ((req as any).userId as string) || 'kidx-user' },
+      audio: { url: signed.signedUrl, format, ...(codec ? { codec } : {}) },
+      request: {
+        model_name: 'bigmodel',
+        enable_itn: true, // 数字/日期规范格式化，利于儿童阅读
+        enable_punc: true,
+        show_utterances: true, // 返回分句时间，用于计算 duration
+      },
     };
 
-    const submitRes = await fetch(`${VOLC_AUC_URL}/submit`, {
+    const submitRes = await fetch(`${VOLC_ASR2_URL}/submit`, {
       method: 'POST',
       headers,
       body: JSON.stringify(submitBody),
     });
-    const submitJson: any = await submitRes.json();
-    const taskId = submitJson?.resp?.id;
-    if (submitJson?.resp?.code !== 1000 || !taskId) {
-      throw new Error(`ASR submit failed: ${submitJson?.resp?.code} ${submitJson?.resp?.message}`);
+    const submitStatus = submitRes.headers.get('X-Api-Status-Code') || '';
+    if (!submitRes.ok || submitStatus !== '20000000') {
+      const errText = await submitRes.text().catch(() => '');
+      throw new Error(`ASR submit failed: HTTP ${submitRes.status} code=${submitStatus} ${errText.slice(0, 200)}`);
     }
 
     // 3. 轮询结果（1.5s 间隔，最多 20 次 = 30s；儿童语音很短，通常 1-2 次即完成）
+    // 20000000=成功；其余 code 视为处理中/未知，继续轮询直至超时
     let text = '';
     let duration: number | undefined;
+    let lastCode = '';
+    let lastMsg = '';
     for (let i = 0; i < 20; i++) {
       await new Promise((r) => setTimeout(r, 1500));
-      const queryRes = await fetch(`${VOLC_AUC_URL}/query`, {
+      const queryRes = await fetch(`${VOLC_ASR2_URL}/query`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ appid: appId, token: accessToken, cluster, id: taskId }),
+        body: JSON.stringify({}),
       });
-      const queryJson: any = await queryRes.json();
-      const resp = queryJson?.resp || {};
-      const code = Number(resp.code);
-      if (code === 1000) {
-        text = resp.text || '';
-        const firstUtter = Array.isArray(resp.utterances) ? resp.utterances[0] : null;
-        const lastUtter = Array.isArray(resp.utterances)
-          ? resp.utterances[resp.utterances.length - 1]
-          : null;
-        if (lastUtter?.end_time) {
-          duration = Math.round(Number(lastUtter.end_time) / 1000);
-        } else if (firstUtter) {
-          duration = undefined;
+      lastCode = queryRes.headers.get('X-Api-Status-Code') || '';
+      lastMsg = queryRes.headers.get('X-Api-Message') || '';
+      if (lastCode === '20000000') {
+        const queryJson: any = await queryRes.json().catch(() => null);
+        const result = queryJson?.result;
+        if (typeof result?.text === 'string') {
+          text = result.text;
+        } else if (Array.isArray(result)) {
+          text = result.map((r: any) => r?.text || '').join('');
+        }
+        const utterances = result?.utterances;
+        if (Array.isArray(utterances) && utterances.length > 0) {
+          const last = utterances[utterances.length - 1];
+          if (last?.end_time) {
+            duration = Math.round(Number(last.end_time) / 1000);
+          }
         }
         break;
       }
-      if (code >= 1000 && code < 2000) {
-        throw new Error(`ASR task failed: ${code} ${resp.message}`);
-      }
-      // 2000 处理中 / 2001 排队中 → 继续等待
     }
 
-    if (!text && !duration) {
-      throw new Error('ASR query timeout');
+    if (!text) {
+      throw new Error(`ASR query timeout or failed: code=${lastCode || 'unknown'} msg=${lastMsg || 'no message'}`);
     }
 
     res.json({
