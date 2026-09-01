@@ -36,7 +36,8 @@ async function authMiddleware(req: Request, res: Response, next: Function) {
 // 凭据来源：火山控制台「语音技术」创建应用后获取 AppID + Access Token
 // ---------------------------------------------------------------------------
 
-const VOLC_TTS_URL = 'https://openspeech.bytedance.com/api/v1/tts';
+const VOLC_TTS2_URL = 'https://openspeech.bytedance.com/api/v3/tts/unidirectional';
+const VOLC_TTS2_RESOURCE = 'seed-tts-2.0'; // 豆包语音合成大模型 2.0
 const VOLC_AUC_URL = 'https://openspeech.bytedance.com/api/v1/auc';
 
 function getVolcCredentials() {
@@ -63,8 +64,8 @@ router.get('/status', (_req: Request, res: Response) => {
   res.json({
     volcAppId: mask(process.env.VOLC_APP_ID),
     volcAccessToken: mask(process.env.VOLC_ACCESS_TOKEN),
-    ttsCluster: process.env.TTS_CLUSTER || 'volcano_tts(default)',
-    ttsVoice: process.env.TTS_VOICE || 'BV001_streaming(default)',
+    ttsCluster: 'seed-tts-2.0(固定)',
+    ttsVoice: process.env.TTS_VOICE || 'MISSING(必填：2.0音色库音色ID)',
     asrCluster: process.env.ASR_CLUSTER || 'volcano_auc(default)',
     llmBaseUrl: process.env.OPENAI_BASE_URL || 'ark-default',
     llmModel: process.env.LLM_MODEL || 'default',
@@ -92,45 +93,70 @@ router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
     }
 
     const { appId, accessToken } = getVolcCredentials();
-    const cluster = process.env.TTS_CLUSTER || 'volcano_tts';
-    const voiceType = process.env.TTS_VOICE || 'BV001_streaming'; // 通用女声（免费音色）
+    const speaker = process.env.TTS_VOICE; // 豆包 2.0 音色 ID（控制台音色库复制，如 zh_female_xxx）
+    if (!speaker) {
+      throw new Error('TTS_VOICE is not configured — 请在火山控制台「豆包语音合成模型 2.0」音色库复制音色 ID');
+    }
 
-    const ttsRes = await fetch(VOLC_TTS_URL, {
+    // 豆包语音合成大模型 2.0（HTTP Chunked，逐帧 JSON：{code, data(base64)}）
+    const ttsRes = await fetch(VOLC_TTS2_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        // 火山 TTS 的鉴权格式固定为 "Bearer;<token>"（分号）
-        Authorization: `Bearer;${accessToken}`,
+        'X-Api-App-Id': appId,
+        'X-Api-Access-Key': accessToken,
+        'X-Api-Resource-Id': VOLC_TTS2_RESOURCE,
+        'X-Api-Request-Id': randomUUID(),
       },
       body: JSON.stringify({
-        app: { appid: appId, token: accessToken, cluster },
-        user: { uid: (req as any).userId || 'kidx-user' },
-        audio: {
-          voice_type: voiceType,
-          encoding: 'mp3',
-          rate: 24000,
-          speed_ratio: 1.1, // 稍快语速，适合儿童注意力
-        },
-        request: {
-          reqid: randomUUID(),
+        req_params: {
           text: ttsText,
-          text_type: 'plain',
-          operation: 'query',
+          speaker,
+          audio_params: {
+            format: 'mp3',
+            sample_rate: 24000,
+            speech_rate: 10, // 略快语速（-50 ~ 100），适合儿童注意力
+          },
         },
       }),
     });
 
-    if (!ttsRes.ok) {
+    if (!ttsRes.ok || !ttsRes.body) {
       const errText = await ttsRes.text().catch(() => '');
-      throw new Error(`Volcano TTS HTTP ${ttsRes.status}: ${errText.slice(0, 200)}`);
+      throw new Error(`Volcano TTS2 HTTP ${ttsRes.status}: ${errText.slice(0, 200)}`);
     }
 
-    const ttsJson: any = await ttsRes.json();
-    if (ttsJson.code !== 3000 || !ttsJson.data) {
-      throw new Error(`Volcano TTS error ${ttsJson.code}: ${ttsJson.message}`);
+    // 解析 chunked 流：每行一个 JSON 帧，code=0 时 data 为 base64 音频
+    const decoder = new TextDecoder();
+    let frameBuf = '';
+    let audioBase64 = '';
+    for await (const chunk of ttsRes.body as any) {
+      frameBuf += decoder.decode(chunk as any, { stream: true });
+      const lines = frameBuf.split('\n');
+      frameBuf = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        let frame: any;
+        try {
+          frame = JSON.parse(trimmed);
+        } catch {
+          continue;
+        }
+        if (frame.code === 0 && frame.data) {
+          audioBase64 += frame.data;
+        } else if (frame.done) {
+          break;
+        } else if (typeof frame.code === 'number' && frame.code !== 0 && frame.code !== 20000000) {
+          throw new Error(`Volcano TTS2 frame error ${frame.code}: ${frame.message ?? ''}`);
+        }
+      }
     }
 
-    const audioBase64: string = ttsJson.data;
+    if (!audioBase64) {
+      throw new Error('Volcano TTS2 returned no audio data');
+    }
+
     const audioSize = Math.floor((audioBase64.length * 3) / 4);
     const audioUri = `data:audio/mpeg;base64,${audioBase64}`;
 
