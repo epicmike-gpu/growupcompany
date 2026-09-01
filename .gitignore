@@ -103,3 +103,6 @@ expo-env.d.ts
 *.tsbuildinfo
 node-compile-cache/
 .codegraph/
+
+# Vercel 构建产物
+api/index.js

@@ -3,7 +3,7 @@
   "buildCommand": "bash vercel-build.sh",
   "outputDirectory": "client/dist",
   "functions": {
-    "api/index.ts": {
+    "api/index.js": {
       "maxDuration": 60,
       "memory": 1024
     }
