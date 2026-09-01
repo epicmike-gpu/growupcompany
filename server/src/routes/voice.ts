@@ -40,6 +40,24 @@ const VOLC_TTS2_URL = 'https://openspeech.bytedance.com/api/v3/tts/unidirectiona
 const VOLC_TTS2_RESOURCE = 'seed-tts-2.0'; // 豆包语音合成大模型 2.0
 const VOLC_AUC_URL = 'https://openspeech.bytedance.com/api/v1/auc';
 
+/**
+ * TTS 2.0 鉴权双轨：
+ * - 新版控制台：单 API Key（X-Api-Key）→ VOLC_API_KEY
+ * - 旧版应用：AppID + Access Token → VOLC_APP_ID / VOLC_ACCESS_TOKEN
+ */
+function getTts2Auth(): Record<string, string> {
+  const apiKey = process.env.VOLC_API_KEY;
+  if (apiKey) {
+    return { 'X-Api-Key': apiKey };
+  }
+  const appId = process.env.VOLC_APP_ID;
+  const accessToken = process.env.VOLC_ACCESS_TOKEN;
+  if (appId && accessToken) {
+    return { 'X-Api-App-Id': appId, 'X-Api-Access-Key': accessToken };
+  }
+  throw new Error('TTS 凭据未配置：请在 Vercel 设置 VOLC_API_KEY（新版单Key）或 VOLC_APP_ID + VOLC_ACCESS_TOKEN（旧版）');
+}
+
 function getVolcCredentials() {
   const appId = process.env.VOLC_APP_ID;
   const accessToken = process.env.VOLC_ACCESS_TOKEN;
@@ -62,9 +80,10 @@ function getVolcCredentials() {
 router.get('/status', (_req: Request, res: Response) => {
   const mask = (v?: string) => (v ? `${v.slice(0, 4)}***(len=${v.length})` : 'MISSING');
   res.json({
+    ttsAuthMode: process.env.VOLC_API_KEY ? 'api-key(新版)' : (process.env.VOLC_APP_ID && process.env.VOLC_ACCESS_TOKEN ? 'appid+token(旧版)' : 'MISSING'),
+    volcApiKey: mask(process.env.VOLC_API_KEY),
     volcAppId: mask(process.env.VOLC_APP_ID),
     volcAccessToken: mask(process.env.VOLC_ACCESS_TOKEN),
-    ttsCluster: 'seed-tts-2.0(固定)',
     ttsVoice: process.env.TTS_VOICE || 'MISSING(必填：2.0音色库音色ID)',
     asrCluster: process.env.ASR_CLUSTER || 'volcano_auc(default)',
     llmBaseUrl: process.env.OPENAI_BASE_URL || 'ark-default',
@@ -92,7 +111,7 @@ router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
       return;
     }
 
-    const { appId, accessToken } = getVolcCredentials();
+    const ttsAuthHeaders = getTts2Auth();
     const speaker = process.env.TTS_VOICE; // 豆包 2.0 音色 ID（控制台音色库复制，如 zh_female_xxx）
     if (!speaker) {
       throw new Error('TTS_VOICE is not configured — 请在火山控制台「豆包语音合成模型 2.0」音色库复制音色 ID');
@@ -103,8 +122,7 @@ router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Api-App-Id': appId,
-        'X-Api-Access-Key': accessToken,
+        ...ttsAuthHeaders,
         'X-Api-Resource-Id': VOLC_TTS2_RESOURCE,
         'X-Api-Request-Id': randomUUID(),
       },
