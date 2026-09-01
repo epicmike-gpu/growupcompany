@@ -1,6 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { execSync } from 'child_process';
-import { getReportBuffer, createWrappedFetch } from 'coze-coding-dev-sdk';
 
 let envLoaded = false;
 
@@ -9,22 +8,17 @@ interface SupabaseCredentials {
   anonKey: string;
 }
 
+/**
+ * Lazy env loading:
+ * 1. Standard env vars (Vercel / Railway / any host): SUPABASE_URL / SUPABASE_ANON_KEY
+ * 2. Sandbox fallback: COZE_SUPABASE_* injected via workload identity (kept for local dev)
+ */
 function loadEnv(): void {
-  if (envLoaded || (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY)) {
+  if (envLoaded || (process.env.SUPABASE_URL && process.env.SUPABASE_ANON_KEY)) {
     return;
   }
 
   try {
-    try {
-      require('dotenv').config();
-      if (process.env.COZE_SUPABASE_URL && process.env.COZE_SUPABASE_ANON_KEY) {
-        envLoaded = true;
-        return;
-      }
-    } catch {
-      // dotenv not available
-    }
-
     const pythonCode = `
 import os
 import sys
@@ -71,14 +65,14 @@ except Exception as e:
 function getSupabaseCredentials(): SupabaseCredentials {
   loadEnv();
 
-  const url = process.env.COZE_SUPABASE_URL;
-  const anonKey = process.env.COZE_SUPABASE_ANON_KEY;
+  const url = process.env.SUPABASE_URL || process.env.COZE_SUPABASE_URL;
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.COZE_SUPABASE_ANON_KEY;
 
   if (!url) {
-    throw new Error('COZE_SUPABASE_URL is not set');
+    throw new Error('SUPABASE_URL is not set (set SUPABASE_URL or COZE_SUPABASE_URL)');
   }
   if (!anonKey) {
-    throw new Error('COZE_SUPABASE_ANON_KEY is not set');
+    throw new Error('SUPABASE_ANON_KEY is not set (set SUPABASE_ANON_KEY or COZE_SUPABASE_ANON_KEY)');
   }
 
   return { url, anonKey };
@@ -86,7 +80,7 @@ function getSupabaseCredentials(): SupabaseCredentials {
 
 function getSupabaseServiceRoleKey(): string | undefined {
   loadEnv();
-  return process.env.COZE_SUPABASE_SERVICE_ROLE_KEY;
+  return process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.COZE_SUPABASE_SERVICE_ROLE_KEY;
 }
 
 function getSupabaseClient(token?: string): SupabaseClient {
@@ -103,14 +97,6 @@ function getSupabaseClient(token?: string): SupabaseClient {
   const globalOptions: Record<string, any> = {};
   if (token) {
     globalOptions.headers = { Authorization: `Bearer ${token}` };
-  }
-  try {
-    const buffer = getReportBuffer();
-    if (buffer) {
-      globalOptions.fetch = createWrappedFetch(buffer, 'supabase');
-    }
-  } catch {
-    // Silent — reporting setup failure should not block client creation
   }
 
   return createClient(url, key, {

@@ -282,7 +282,7 @@ importers:
         version: 2.8.6
       coze-coding-dev-sdk:
         specifier: ^0.7.24
-        version: 0.7.24(openai@6.16.0(ws@8.19.0)(zod@4.3.6))(ws@8.19.0)
+        version: 0.7.24(openai@7.8.0(undici@6.23.0)(zod@4.3.6))
       dayjs:
         specifier: ^1.11.20
         version: 1.11.20
@@ -301,6 +301,9 @@ importers:
       multer:
         specifier: ^2.0.2
         version: 2.0.2
+      openai:
+        specifier: ^7.8.0
+        version: 7.8.0(undici@6.23.0)(zod@4.3.6)
       pg:
         specifier: ^8.16.3
         version: 8.17.2
@@ -4925,6 +4928,30 @@ packages:
       zod:
         optional: true
 
+  openai@7.8.0:
+    resolution: {integrity: sha512-/2g9JzdnXNcjX1W/UlSNu+OdSFDAaAVt0n9Onom0kPenH54o59G2WrX/xjTnr26UHNSh6hxcAf58doGYRme2rw==}
+    engines: {node: '>=22.0.0'}
+    peerDependencies:
+      '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
+      '@smithy/hash-node': '>=4.3.0 <5'
+      '@smithy/signature-v4': '>=5.4.0 <6'
+      undici: '>=5 <9'
+      ws: ^8.21.0
+      zod: ^3.25 || ^4.0
+    peerDependenciesMeta:
+      '@aws-sdk/credential-provider-node':
+        optional: true
+      '@smithy/hash-node':
+        optional: true
+      '@smithy/signature-v4':
+        optional: true
+      undici:
+        optional: true
+      ws:
+        optional: true
+      zod:
+        optional: true
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -7640,14 +7667,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@langchain/core@1.1.17(openai@6.16.0(ws@8.19.0)(zod@4.3.6))':
+  '@langchain/core@1.1.17(openai@7.8.0(undici@6.23.0)(zod@4.3.6))':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       ansi-styles: 5.2.0
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.21
-      langsmith: 0.4.9(openai@6.16.0(ws@8.19.0)(zod@4.3.6))
+      langsmith: 0.4.9(openai@7.8.0(undici@6.23.0)(zod@4.3.6))
       mustache: 4.2.0
       p-queue: 6.6.2
       uuid: 10.0.0
@@ -7658,11 +7685,11 @@ snapshots:
       - '@opentelemetry/sdk-trace-base'
       - openai
 
-  '@langchain/openai@1.2.3(@langchain/core@1.1.17(openai@6.16.0(ws@8.19.0)(zod@4.3.6)))(ws@8.19.0)':
+  '@langchain/openai@1.2.3(@langchain/core@1.1.17(openai@7.8.0(undici@6.23.0)(zod@4.3.6)))':
     dependencies:
-      '@langchain/core': 1.1.17(openai@6.16.0(ws@8.19.0)(zod@4.3.6))
+      '@langchain/core': 1.1.17(openai@7.8.0(undici@6.23.0)(zod@4.3.6))
       js-tiktoken: 1.0.21
-      openai: 6.16.0(ws@8.19.0)(zod@4.3.6)
+      openai: 6.16.0(zod@4.3.6)
       zod: 4.3.6
     transitivePeerDependencies:
       - ws
@@ -9147,10 +9174,10 @@ snapshots:
       path-type: 4.0.0
       yaml: 1.10.2
 
-  coze-coding-dev-sdk@0.7.24(openai@6.16.0(ws@8.19.0)(zod@4.3.6))(ws@8.19.0):
+  coze-coding-dev-sdk@0.7.24(openai@7.8.0(undici@6.23.0)(zod@4.3.6)):
     dependencies:
-      '@langchain/core': 1.1.17(openai@6.16.0(ws@8.19.0)(zod@4.3.6))
-      '@langchain/openai': 1.2.3(@langchain/core@1.1.17(openai@6.16.0(ws@8.19.0)(zod@4.3.6)))(ws@8.19.0)
+      '@langchain/core': 1.1.17(openai@7.8.0(undici@6.23.0)(zod@4.3.6))
+      '@langchain/openai': 1.2.3(@langchain/core@1.1.17(openai@7.8.0(undici@6.23.0)(zod@4.3.6)))
       '@supabase/supabase-js': 2.95.3
       axios: 1.13.6
       pg: 8.17.2
@@ -11179,7 +11206,7 @@ snapshots:
 
   lan-network@0.1.7: {}
 
-  langsmith@0.4.9(openai@6.16.0(ws@8.19.0)(zod@4.3.6)):
+  langsmith@0.4.9(openai@7.8.0(undici@6.23.0)(zod@4.3.6)):
     dependencies:
       '@types/uuid': 10.0.0
       chalk: 4.1.2
@@ -11188,7 +11215,7 @@ snapshots:
       semver: 7.7.3
       uuid: 10.0.0
     optionalDependencies:
-      openai: 6.16.0(ws@8.19.0)(zod@4.3.6)
+      openai: 7.8.0(undici@6.23.0)(zod@4.3.6)
 
   leven@3.1.0: {}
 
@@ -11807,9 +11834,13 @@ snapshots:
       is-docker: 2.2.1
       is-wsl: 2.2.0
 
-  openai@6.16.0(ws@8.19.0)(zod@4.3.6):
+  openai@6.16.0(zod@4.3.6):
     optionalDependencies:
-      ws: 8.19.0
+      zod: 4.3.6
+
+  openai@7.8.0(undici@6.23.0)(zod@4.3.6):
+    optionalDependencies:
+      undici: 6.23.0
       zod: 4.3.6
 
   optionator@0.9.4:

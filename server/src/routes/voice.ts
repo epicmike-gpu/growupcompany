@@ -1,10 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { getSupabaseClient } from '../storage/database/supabase-client.js';
-import { TTSClient, ASRClient, LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
-import axios from 'axios';
-import path from 'path';
-import fs from 'fs';
+import OpenAI from 'openai';
 
 const router = Router();
 const upload = multer({
@@ -34,49 +31,54 @@ async function authMiddleware(req: Request, res: Response, next: Function) {
   next();
 }
 
+function getOpenAIClient(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error('OPENAI_API_KEY is not configured');
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
+
 /**
  * POST /api/v1/voice/tts
  * Text-to-Speech: convert text to audio
  * Headers: x-session: string
  * Body: { text: string, speaker?: string }
+ * Returns: { success, audioUri } — audioUri is a base64 data URI playable by expo-av
  */
 router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { text, speaker } = req.body;
+    const { text } = req.body;
 
     if (!text) {
       res.status(400).json({ error: '缺少文本参数' });
       return;
     }
 
-    const customHeaders = HeaderUtils.extractForwardHeaders(req.headers as Record<string, string>);
-    const config = new Config();
-    const ttsClient = new TTSClient(config, customHeaders);
+    if (text.length > 4000) {
+      res.status(400).json({ error: '文本过长' });
+      return;
+    }
 
-    const response = await ttsClient.synthesize({
-      uid: (req as any).userId,
-      text,
-      speaker: speaker || 'zh_female_xueayi_saturn_bigtts', // Children's audiobook voice
-      audioFormat: 'mp3',
-      sampleRate: 24000,
-      speechRate: 10, // Slightly faster for kids' attention
+    const openai = getOpenAIClient();
+    const mp3 = await openai.audio.speech.create({
+      model: process.env.TTS_MODEL || 'gpt-4o-mini-tts',
+      voice: (process.env.TTS_VOICE as any) || 'nova', // Lively female voice, kid-friendly
+      input: text,
+      response_format: 'mp3',
+      speed: 1.1, // Slightly faster for kids' attention
     });
 
-    // Download audio and save to /tmp
-    const audioData = await axios.get(response.audioUri, { responseType: 'arraybuffer' });
-    const fileName = `tts_${Date.now()}.mp3`;
-    const filePath = path.join('/tmp', fileName);
-    fs.writeFileSync(filePath, Buffer.from(audioData.data));
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    const audioUri = `data:audio/mpeg;base64,${buffer.toString('base64')}`;
 
     res.json({
       success: true,
-      audioUri: response.audioUri,
-      audioSize: response.audioSize,
-      localPath: filePath,
+      audioUri,
+      audioSize: buffer.length,
     });
   } catch (error: any) {
-    console.error('TTS error:', error);
-    res.status(500).json({ error: error.message || '语音合成失败' });
+    console.error('TTS error:', error?.message || error);
+    res.status(500).json({ error: error?.message || '语音合成失败' });
   }
 });
 
@@ -94,25 +96,21 @@ router.post('/asr', authMiddleware, upload.single('audio'), async (req: Request,
     }
 
     const { buffer, mimetype } = req.file;
-    const base64Audio = buffer.toString('base64');
+    const ext = (mimetype || 'audio/m4a').split('/')[1]?.split(';')[0] || 'm4a';
 
-    const customHeaders = HeaderUtils.extractForwardHeaders(req.headers as Record<string, string>);
-    const config = new Config();
-    const asrClient = new ASRClient(config, customHeaders);
-
-    const result = await asrClient.recognize({
-      uid: (req as any).userId,
-      base64Data: base64Audio,
+    const openai = getOpenAIClient();
+    const result = await openai.audio.transcriptions.create({
+      model: process.env.ASR_MODEL || 'whisper-1',
+      file: new File([new Uint8Array(buffer)], `audio.${ext}`, { type: mimetype || 'audio/m4a' }),
     });
 
     res.json({
       success: true,
       text: result.text,
-      duration: result.duration,
     });
   } catch (error: any) {
-    console.error('ASR error:', error);
-    res.status(500).json({ error: error.message || '语音识别失败' });
+    console.error('ASR error:', error?.message || error);
+    res.status(500).json({ error: error?.message || '语音识别失败' });
   }
 });
 

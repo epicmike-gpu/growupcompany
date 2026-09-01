@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { getSupabaseClient } from '../storage/database/supabase-client.js';
-import { LLMClient, Config, HeaderUtils } from 'coze-coding-dev-sdk';
+import OpenAI from 'openai';
 
 const router = Router();
 
@@ -160,9 +160,7 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-cache, no-store, no-transform, must-revalidate');
     res.setHeader('Connection', 'keep-alive');
 
-    const customHeaders = HeaderUtils.extractForwardHeaders(req.headers as Record<string, string>);
-    const config = new Config();
-    const llmClient = new LLMClient(config, customHeaders);
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
     const llmMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemPrompt },
@@ -180,9 +178,11 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     // Current message MUST be the last one, so the LLM prioritizes it
     llmMessages.push({ role: 'user', content: message });
 
-    const stream = llmClient.stream(llmMessages, {
-      model: 'doubao-seed-2-0-mini-260215',
+    const stream = await openai.chat.completions.create({
+      model: process.env.LLM_MODEL || 'gpt-4o-mini',
+      messages: llmMessages,
       temperature: 0.9,
+      stream: true,
     });
 
     let fullResponse = '';
@@ -197,8 +197,8 @@ router.post('/', authMiddleware, async (req: Request, res: Response) => {
     };
 
     for await (const chunk of stream) {
-      if (chunk.content) {
-        const text = chunk.content.toString();
+      const text = chunk.choices?.[0]?.delta?.content || '';
+      if (text) {
         fullResponse += text;
 
         if (!englishTutorEnabled) {
