@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
+import { randomUUID } from 'crypto';
 import { getSupabaseClient } from '../storage/database/supabase-client.js';
-import OpenAI from 'openai';
 
 const router = Router();
 const upload = multer({
@@ -31,19 +31,31 @@ async function authMiddleware(req: Request, res: Response, next: Function) {
   next();
 }
 
-function getOpenAIClient(): OpenAI {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error('OPENAI_API_KEY is not configured');
+// ---------------------------------------------------------------------------
+// 火山引擎语音服务（openspeech.bytedance.com）
+// 凭据来源：火山控制台「语音技术」创建应用后获取 AppID + Access Token
+// ---------------------------------------------------------------------------
+
+const VOLC_TTS_URL = 'https://openspeech.bytedance.com/api/v1/tts';
+const VOLC_AUC_URL = 'https://openspeech.bytedance.com/api/v1/auc';
+
+function getVolcCredentials() {
+  const appId = process.env.VOLC_APP_ID;
+  const accessToken = process.env.VOLC_ACCESS_TOKEN;
+  if (!appId || !accessToken) {
+    throw new Error('VOLC_APP_ID / VOLC_ACCESS_TOKEN is not configured');
   }
-  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  return { appId, accessToken };
 }
 
 /**
  * POST /api/v1/voice/tts
- * Text-to-Speech: convert text to audio
+ * Text-to-Speech: convert text to audio (火山语音合成, HTTP 非流式)
+ * 服务端文件：server/src/routes/voice.ts
+ * 接口：POST /api/v1/voice/tts
  * Headers: x-session: string
  * Body: { text: string, speaker?: string }
- * Returns: { success, audioUri } — audioUri is a base64 data URI playable by expo-av
+ * Returns: { success, audioUri, audioSize } — audioUri is a base64 data URI playable by expo-av
  */
 router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -54,27 +66,63 @@ router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
       return;
     }
 
-    if (text.length > 4000) {
+    // 火山 HTTP 接口单次请求文本限制 1024 字节（UTF-8），超长截断
+    let ttsText: string = text;
+    while (Buffer.byteLength(ttsText, 'utf8') > 1000 && ttsText.length > 0) {
+      ttsText = ttsText.slice(0, -20);
+    }
+    if (!ttsText.trim()) {
       res.status(400).json({ error: '文本过长' });
       return;
     }
 
-    const openai = getOpenAIClient();
-    const mp3 = await openai.audio.speech.create({
-      model: process.env.TTS_MODEL || 'gpt-4o-mini-tts',
-      voice: (process.env.TTS_VOICE as any) || 'nova', // Lively female voice, kid-friendly
-      input: text,
-      response_format: 'mp3',
-      speed: 1.1, // Slightly faster for kids' attention
+    const { appId, accessToken } = getVolcCredentials();
+    const cluster = process.env.TTS_CLUSTER || 'volcano_tts';
+    const voiceType = process.env.TTS_VOICE || 'BV001_streaming'; // 通用女声（免费音色）
+
+    const ttsRes = await fetch(VOLC_TTS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // 火山 TTS 的鉴权格式固定为 "Bearer;<token>"（分号）
+        Authorization: `Bearer;${accessToken}`,
+      },
+      body: JSON.stringify({
+        app: { appid: appId, token: accessToken, cluster },
+        user: { uid: (req as any).userId || 'kidx-user' },
+        audio: {
+          voice_type: voiceType,
+          encoding: 'mp3',
+          rate: 24000,
+          speed_ratio: 1.1, // 稍快语速，适合儿童注意力
+        },
+        request: {
+          reqid: randomUUID(),
+          text: ttsText,
+          text_type: 'plain',
+          operation: 'query',
+        },
+      }),
     });
 
-    const buffer = Buffer.from(await mp3.arrayBuffer());
-    const audioUri = `data:audio/mpeg;base64,${buffer.toString('base64')}`;
+    if (!ttsRes.ok) {
+      const errText = await ttsRes.text().catch(() => '');
+      throw new Error(`Volcano TTS HTTP ${ttsRes.status}: ${errText.slice(0, 200)}`);
+    }
+
+    const ttsJson: any = await ttsRes.json();
+    if (ttsJson.code !== 3000 || !ttsJson.data) {
+      throw new Error(`Volcano TTS error ${ttsJson.code}: ${ttsJson.message}`);
+    }
+
+    const audioBase64: string = ttsJson.data;
+    const audioSize = Math.floor((audioBase64.length * 3) / 4);
+    const audioUri = `data:audio/mpeg;base64,${audioBase64}`;
 
     res.json({
       success: true,
       audioUri,
-      audioSize: buffer.length,
+      audioSize,
     });
   } catch (error: any) {
     console.error('TTS error:', error?.message || error);
@@ -84,33 +132,136 @@ router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
 
 /**
  * POST /api/v1/voice/asr
- * Speech Recognition: convert audio to text
+ * Speech Recognition: convert audio to text (火山录音文件识别极速版)
+ *
+ * 流程：m4a buffer → Supabase Storage（签名 URL）→ submit 任务 → 轮询 query → text
+ * （前端录音为 m4a/mp4 容器，大模型 ASR 不支持，极速版 format:'mp4' 支持）
+ *
+ * 服务端文件：server/src/routes/voice.ts
+ * 接口：POST /api/v1/voice/asr
  * Headers: x-session: string
- * Body: FormData with 'audio' file
+ * Body: FormData with 'audio' file (m4a/mp4)
  */
 router.post('/asr', authMiddleware, upload.single('audio'), async (req: Request, res: Response) => {
+  const uploadedPath: string | null = `asr/${randomUUID()}.m4a`;
   try {
     if (!req.file) {
       res.status(400).json({ error: '请上传音频文件' });
       return;
     }
 
-    const { buffer, mimetype } = req.file;
-    const ext = (mimetype || 'audio/m4a').split('/')[1]?.split(';')[0] || 'm4a';
+    const { buffer } = req.file;
+    const { appId, accessToken } = getVolcCredentials();
+    const cluster = process.env.ASR_CLUSTER;
+    if (!cluster) {
+      throw new Error('ASR_CLUSTER is not configured');
+    }
 
-    const openai = getOpenAIClient();
-    const result = await openai.audio.transcriptions.create({
-      model: process.env.ASR_MODEL || 'whisper-1',
-      file: new File([new Uint8Array(buffer)], `audio.${ext}`, { type: mimetype || 'audio/m4a' }),
+    // 1. 上传音频到 Supabase Storage，生成短时效签名 URL 供火山下载
+    const admin = getSupabaseClient(); // service role：绕过 RLS 上传音频
+    if (!admin) {
+      throw new Error('Supabase admin client unavailable (SERVICE_ROLE_KEY missing)');
+    }
+
+    const bucket = 'audio';
+    const { error: bucketErr } = await admin.storage.createBucket(bucket, { public: false });
+    if (bucketErr && !`${bucketErr.message}`.includes('exists')) {
+      throw new Error(`createBucket failed: ${bucketErr.message}`);
+    }
+
+    const { error: upErr } = await admin.storage
+      .from(bucket)
+      .upload(uploadedPath, buffer, { contentType: 'audio/mp4', upsert: true });
+    if (upErr) {
+      throw new Error(`upload audio failed: ${upErr.message}`);
+    }
+
+    const { data: signed, error: signErr } = await admin.storage
+      .from(bucket)
+      .createSignedUrl(uploadedPath, 3600);
+    if (signErr || !signed?.signedUrl) {
+      throw new Error(`createSignedUrl failed: ${signErr?.message || 'no url'}`);
+    }
+
+    // 2. 提交识别任务（format mp4 = m4a 容器）
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer; ${accessToken}`,
+    };
+    const submitBody = {
+      app: { appid: appId, token: accessToken, cluster },
+      user: { uid: (req as any).userId || 'kidx-user' },
+      audio: { format: 'mp4', url: signed.signedUrl },
+      additions: { with_speaker_info: 'False' },
+    };
+
+    const submitRes = await fetch(`${VOLC_AUC_URL}/submit`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(submitBody),
     });
+    const submitJson: any = await submitRes.json();
+    const taskId = submitJson?.resp?.id;
+    if (submitJson?.resp?.code !== 1000 || !taskId) {
+      throw new Error(`ASR submit failed: ${submitJson?.resp?.code} ${submitJson?.resp?.message}`);
+    }
+
+    // 3. 轮询结果（1.5s 间隔，最多 20 次 = 30s；儿童语音很短，通常 1-2 次即完成）
+    let text = '';
+    let duration: number | undefined;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const queryRes = await fetch(`${VOLC_AUC_URL}/query`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ appid: appId, token: accessToken, cluster, id: taskId }),
+      });
+      const queryJson: any = await queryRes.json();
+      const resp = queryJson?.resp || {};
+      const code = Number(resp.code);
+      if (code === 1000) {
+        text = resp.text || '';
+        const firstUtter = Array.isArray(resp.utterances) ? resp.utterances[0] : null;
+        const lastUtter = Array.isArray(resp.utterances)
+          ? resp.utterances[resp.utterances.length - 1]
+          : null;
+        if (lastUtter?.end_time) {
+          duration = Math.round(Number(lastUtter.end_time) / 1000);
+        } else if (firstUtter) {
+          duration = undefined;
+        }
+        break;
+      }
+      if (code >= 1000 && code < 2000) {
+        throw new Error(`ASR task failed: ${code} ${resp.message}`);
+      }
+      // 2000 处理中 / 2001 排队中 → 继续等待
+    }
+
+    if (!text && !duration) {
+      throw new Error('ASR query timeout');
+    }
 
     res.json({
       success: true,
-      text: result.text,
+      text,
+      ...(duration !== undefined ? { duration } : {}),
     });
   } catch (error: any) {
     console.error('ASR error:', error?.message || error);
     res.status(500).json({ error: error?.message || '语音识别失败' });
+  } finally {
+    // 4. 清理 Storage 临时音频（失败时尽力清理，不阻塞响应）
+    if (uploadedPath) {
+      try {
+        const admin = getSupabaseClient(); // service role：绕过 RLS 上传音频
+        if (admin) {
+          await admin.storage.from('audio').remove([uploadedPath]);
+        }
+      } catch {
+        /* cleanup best-effort */
+      }
+    }
   }
 });
 
