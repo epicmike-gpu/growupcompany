@@ -57,6 +57,21 @@ function getVolcCredentials() {
  * Body: { text: string, speaker?: string }
  * Returns: { success, audioUri, audioSize } — audioUri is a base64 data URI playable by expo-av
  */
+// 语音凭据自检（脱敏）：GET /api/v1/voice/status
+router.get('/status', (_req: Request, res: Response) => {
+  const mask = (v?: string) => (v ? `${v.slice(0, 4)}***(len=${v.length})` : 'MISSING');
+  res.json({
+    volcAppId: mask(process.env.VOLC_APP_ID),
+    volcAccessToken: mask(process.env.VOLC_ACCESS_TOKEN),
+    ttsCluster: process.env.TTS_CLUSTER || 'volcano_tts(default)',
+    ttsVoice: process.env.TTS_VOICE || 'BV001_streaming(default)',
+    asrCluster: process.env.ASR_CLUSTER || 'volcano_auc(default)',
+    llmBaseUrl: process.env.OPENAI_BASE_URL || 'ark-default',
+    llmModel: process.env.LLM_MODEL || 'default',
+    llmApiKey: process.env.OPENAI_API_KEY ? `set(len=${process.env.OPENAI_API_KEY.length})` : 'MISSING',
+  });
+});
+
 router.post('/tts', authMiddleware, async (req: Request, res: Response) => {
   try {
     const { text } = req.body;
