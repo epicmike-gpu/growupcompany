@@ -358,7 +358,7 @@ export default function HomeScreen() {
             </Animated.View>
           </View>
           <Text style={styles.heroTitle}>伴伴</Text>
-          <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
+          <Text style={styles.heroSubtitle}>点击下方卡片，让伴伴陪你完成任务吧!</Text>
         </View>
 
         {/* 额度用尽提示 */}
@@ -539,7 +539,7 @@ export default function HomeScreen() {
           </View>
           <View style={styles.freeChatText}>
             <Text style={styles.freeChatTitle}>自由聊天</Text>
-            <Text style={styles.freeChatSubtitle}>和精灵随便聊聊吧~</Text>
+            <Text style={styles.freeChatSubtitle}>和伴伴随便聊聊吧~</Text>
           </View>
           <FontAwesome6 name="chevron-right" size={16} color="#8B87A0" />
         </TouchableOpacity>

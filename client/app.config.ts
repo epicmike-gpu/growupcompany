@@ -75,7 +75,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       [
         "expo-av",
         {
-          "microphonePermission": `伴伴需要使用麦克风，以便小朋友可以和精灵语音对话。`
+          "microphonePermission": `伴伴需要使用麦克风，以便小朋友可以和伴伴语音对话。`
         }
       ]
     ],

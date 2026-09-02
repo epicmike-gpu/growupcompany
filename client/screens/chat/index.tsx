@@ -657,7 +657,7 @@ export default function ChatScreen() {
     stopAutoSound();
 
     if (isStreaming) {
-      Toast.show({ type: 'info', text1: '精灵正在说话，请稍等' });
+      Toast.show({ type: 'info', text1: '伴伴正在说话，请稍等' });
       return;
     }
 

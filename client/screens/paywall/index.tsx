@@ -198,7 +198,7 @@ export default function PaywallScreen() {
             <Text style={styles.noticeTitle}>温馨提示</Text>
             <Text style={styles.noticeText}>
               · 次数永久有效，用完可随时续充{'\n'}
-              · 每次和小精灵对话消耗 1 次{'\n'}
+              · 每次和伴伴对话消耗 1 次{'\n'}
               · 支付遇到问题请联系爸爸妈妈帮忙
             </Text>
           </View>
