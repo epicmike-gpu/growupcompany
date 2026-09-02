@@ -112,34 +112,38 @@ function MemoryCard({
     }
   }, [isMatched, pulseAnim]);
 
-  // rotateY 插值为静态字符串区间（['0deg','180deg']），避免动态拼接单位
-  const rotateY = flipAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0deg', '180deg'],
+  // 两段式翻转（原生端稳定）：背层 0→90° 转出，正面层 90°→0° 转入。
+  // 每层只有一层独立 rotateY，无嵌套旋转（原生端不支持嵌套 3D 场景合成），
+  // 也不依赖 backfaceVisibility（Web 端该属性不可靠）
+  const backRotateY = flipAnim.interpolate({
+    inputRange: [0, 0.5],
+    outputRange: ['0deg', '90deg'],
   });
-
-  // 透明度交叉渐变（不依赖 backfaceVisibility，Web 端该属性不可靠）
+  const frontRotateY = flipAnim.interpolate({
+    inputRange: [0.5, 1],
+    outputRange: ['90deg', '0deg'],
+  });
   const frontOpacity = flipAnim.interpolate({
-    inputRange: [0, 0.45, 0.55, 1],
-    outputRange: [0, 0, 1, 1],
+    inputRange: [0, 0.45, 0.5, 0.6, 1],
+    outputRange: [0, 0, 0, 1, 1],
   });
   const backOpacity = flipAnim.interpolate({
-    inputRange: [0, 0.45, 0.55, 1],
+    inputRange: [0, 0.45, 0.5, 1],
     outputRange: [1, 1, 0, 0],
   });
 
   const isFront = isFlipped || isMatched;
 
   return (
-    <Animated.View
-      style={[
-        styles.cardWrap,
-        { width: size, height: size * 1.15, transform: [{ perspective: 1000 }, { rotateY }] },
-      ]}
-    >
+    <Animated.View style={[styles.cardWrap, { width: size, height: size * 1.15 }]}>
       {/* 正面（单词/中文） */}
       <AnimatedTouchable
-        style={[styles.cardFace, isFront && styles.cardFaceFront, isMatched && styles.cardMatched, { opacity: frontOpacity }]}
+        style={[
+          styles.cardFace,
+          isFront && styles.cardFaceFront,
+          isMatched && styles.cardMatched,
+          { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontRotateY }] },
+        ]}
         onPress={onPress}
         activeOpacity={0.9}
         disabled={!isFront}
@@ -159,7 +163,12 @@ function MemoryCard({
 
       {/* 背面（问号） */}
       <AnimatedTouchable
-        style={[styles.cardFace, styles.cardFaceBack, !isFront && styles.cardBackVisible, { opacity: backOpacity }]}
+        style={[
+          styles.cardFace,
+          styles.cardFaceBack,
+          !isFront && styles.cardBackVisible,
+          { opacity: backOpacity, transform: [{ perspective: 1000 }, { rotateY: backRotateY }] },
+        ]}
         onPress={onPress}
         activeOpacity={0.9}
         disabled={isFront}
@@ -882,7 +891,6 @@ const styles = StyleSheet.create({
   },
   cardFaceFront: {
     ...StyleSheet.absoluteFillObject,
-    transform: [{ rotateY: '180deg' }],
     backgroundColor: '#FFFFFF',
     borderWidth: 2,
     borderColor: '#E8E4F5',
