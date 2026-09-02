@@ -863,7 +863,7 @@ export default function ChatScreen() {
           <View style={styles.headerLeft}>
             <GlassStarBall size={40} />
             <View>
-              <Text style={styles.headerTitle}>成长精灵</Text>
+              <Text style={styles.headerTitle}>伴伴</Text>
               <Text style={styles.headerSubtitle}>{commandLabel}</Text>
             </View>
           </View>
