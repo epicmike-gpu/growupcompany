@@ -357,7 +357,7 @@ export default function HomeScreen() {
               </View>
             </Animated.View>
           </View>
-          <Text style={styles.heroTitle}>成长陪伴精灵</Text>
+          <Text style={styles.heroTitle}>伴伴</Text>
           <Text style={styles.heroSubtitle}>点击下方卡片，让精灵陪你完成任务吧!</Text>
         </View>
 

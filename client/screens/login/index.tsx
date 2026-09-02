@@ -17,8 +17,8 @@ import { useSafeRouter } from '@/hooks/useSafeRouter';
 import Toast from 'react-native-toast-message';
 import * as AppleAuthentication from 'expo-apple-authentication';
 
-const APP_ICON = 'https://coze-coding-project.tos.coze.site/gen_project_icon/2026-08-16/7674509627962163263_1786863217.png?sign=4908927271-aa980cca83-0-646b6e68e1f94d1f4209f0d945cf92ea5f18018150474527db0b422964fd3680';
-const APP_NAME = '成长陪伴精灵App';
+const APP_ICON = require('@/assets/images/icon.png');
+const APP_NAME = '伴伴';
 
 export default function LoginScreen() {
   const { signInWithOtp, verifyOtp, signInAsGuest, signInWithApple, isAuthenticated } = useAuth();
@@ -170,9 +170,8 @@ export default function LoginScreen() {
           {/* App Icon & Name */}
           <View style={styles.header}>
             <Image
-              source={{ uri: APP_ICON }}
+              source={APP_ICON}
               style={styles.appIcon}
-              defaultSource={require('@/assets/images/icon.png')}
             />
             <Text style={styles.appName}>{APP_NAME}</Text>
             <Text style={styles.subtitle}>陪伴宝贝成长的智能小伙伴</Text>
