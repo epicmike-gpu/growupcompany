@@ -887,7 +887,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 6,
     paddingHorizontal: 4,
-    backfaceVisibility: 'hidden',
   },
   cardFaceFront: {
     ...StyleSheet.absoluteFillObject,
