@@ -89,17 +89,36 @@ const MemoryCard = React.memo(function MemoryCard({
   const prevFlipped = useRef(false);
 
   // 翻转动画：翻到英文卡时自动朗读单词（学习反馈）
+  // 层渲染互斥：动画结束后卸载停驻在侧视角度的那一层，规避 Android 原生端对纯侧面视图的渲染 glitch
+  const [showFront, setShowFront] = useState(false);
+  const [showBack, setShowBack] = useState(true);
+
   useEffect(() => {
     if (isFlipped && !prevFlipped.current && card.type === 'en') {
       speakWord(card.text);
     }
     prevFlipped.current = isFlipped;
-    Animated.timing(flipAnim, {
-      toValue: isFlipped || isMatched ? 1 : 0,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
+    if (isFlipped || isMatched) {
+      setShowFront(true);
+      Animated.timing(flipAnim, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setShowBack(false);
+      });
+    } else {
+      setShowBack(true);
+      Animated.timing(flipAnim, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) setShowFront(false);
+      });
+    }
   }, [isFlipped, isMatched, card.type, card.text, flipAnim]);
 
   // 配对成功：脉冲庆祝动画
@@ -120,7 +139,7 @@ const MemoryCard = React.memo(function MemoryCard({
     () =>
       flipAnim.interpolate({
         inputRange: [0, 0.5],
-        outputRange: ['0deg', '90deg'],
+        outputRange: ['0deg', '89deg'],
       }),
     [flipAnim]
   );
@@ -128,7 +147,7 @@ const MemoryCard = React.memo(function MemoryCard({
     () =>
       flipAnim.interpolate({
         inputRange: [0.5, 1],
-        outputRange: ['90deg', '0deg'],
+        outputRange: ['89deg', '0deg'],
       }),
     [flipAnim]
   );
@@ -159,7 +178,11 @@ const MemoryCard = React.memo(function MemoryCard({
           styles.cardFace,
           isFront && styles.cardFaceFront,
           isMatched && styles.cardMatched,
-          { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontRotateY }] },
+          {
+            display: showFront ? 'flex' : 'none',
+            opacity: frontOpacity,
+            transform: [{ perspective: 1000 }, { rotateY: frontRotateY }],
+          },
         ]}
         onPress={() => onPress(card)}
         activeOpacity={0.9}
@@ -184,7 +207,11 @@ const MemoryCard = React.memo(function MemoryCard({
           styles.cardFace,
           styles.cardFaceBack,
           !isFront && styles.cardBackVisible,
-          { opacity: backOpacity, transform: [{ perspective: 1000 }, { rotateY: backRotateY }] },
+          {
+            display: showBack ? 'flex' : 'none',
+            opacity: backOpacity,
+            transform: [{ perspective: 1000 }, { rotateY: backRotateY }],
+          },
         ]}
         onPress={() => onPress(card)}
         activeOpacity={0.9}
