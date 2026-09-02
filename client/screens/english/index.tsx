@@ -3,6 +3,7 @@ import {
   View,
   Text,
   TouchableOpacity,
+  Pressable,
   StyleSheet,
   ScrollView,
   Animated,
@@ -68,7 +69,6 @@ const hapticFail = () => {
 
 /** 单张记忆卡片：3D 翻转动画 + 英文卡自动发音 + 配对成功脉冲 */
 // 支持 Animated 透明度驱动的触摸层（opacity 插值需要 Animated 组件承载）
-const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
 const MemoryCard = React.memo(function MemoryCard({
   card,
@@ -89,36 +89,21 @@ const MemoryCard = React.memo(function MemoryCard({
   const prevFlipped = useRef(false);
 
   // 翻转动画：翻到英文卡时自动朗读单词（学习反馈）
-  // 层渲染互斥：动画结束后卸载停驻在侧视角度的那一层，规避 Android 原生端对纯侧面视图的渲染 glitch
-  const [showFront, setShowFront] = useState(false);
-  const [showBack, setShowBack] = useState(true);
-
+  // 注意：effect 内不做任何 setState——动画层的挂载/卸载与原生驱动动画竞争是闪烁根源，
+  // 改为两层常驻（opacity 交叉渐变 + 端点避开 90°），由原生驱动独立完成，JS 侧零干预
   useEffect(() => {
     if (isFlipped && !prevFlipped.current && card.type === 'en') {
+      hapticFlip();
       speakWord(card.text);
     }
     prevFlipped.current = isFlipped;
-    if (isFlipped || isMatched) {
-      setShowFront(true);
-      Animated.timing(flipAnim, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setShowBack(false);
-      });
-    } else {
-      setShowBack(true);
-      Animated.timing(flipAnim, {
-        toValue: 0,
-        duration: 220,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) setShowFront(false);
-      });
-    }
+
+    Animated.timing(flipAnim, {
+      toValue: isFlipped ? 1 : 0,
+      duration: isFlipped ? 260 : 180,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
   }, [isFlipped, isMatched, card.type, card.text, flipAnim]);
 
   // 配对成功：脉冲庆祝动画
@@ -171,65 +156,59 @@ const MemoryCard = React.memo(function MemoryCard({
   const isFront = isFlipped || isMatched;
 
   return (
-    <Animated.View style={[styles.cardWrap, { width: size, height: size * 1.15 }]}>
-      {/* 正面（单词/中文） */}
-      <AnimatedTouchable
-        style={[
-          styles.cardFace,
-          isFront && styles.cardFaceFront,
-          isMatched && styles.cardMatched,
-          {
-            display: showFront ? 'flex' : 'none',
-            opacity: frontOpacity,
-            transform: [{ perspective: 1000 }, { rotateY: frontRotateY }],
-          },
-        ]}
-        onPress={() => onPress(card)}
-        activeOpacity={0.9}
-        disabled={!isFront}
-      >
-        <Text style={styles.cardEmoji} allowFontScaling={false}>
-          {card.emoji}
-        </Text>
-        <Text style={[styles.cardText, card.type === 'en' && styles.cardTextEn]} numberOfLines={2}>
-          {card.text}
-        </Text>
-        {card.type === 'en' && (
-          <View style={styles.speakerTag}>
-            <FontAwesome6 name="volume-high" size={9} color="#7C5CFC" />
-          </View>
-        )}
-      </AnimatedTouchable>
-
-      {/* 背面（问号） */}
-      <AnimatedTouchable
-        style={[
-          styles.cardFace,
-          styles.cardFaceBack,
-          !isFront && styles.cardBackVisible,
-          {
-            display: showBack ? 'flex' : 'none',
-            opacity: backOpacity,
-            transform: [{ perspective: 1000 }, { rotateY: backRotateY }],
-          },
-        ]}
-        onPress={() => onPress(card)}
-        activeOpacity={0.9}
-        disabled={isFront}
-      >
-        <LinearGradient
-          style={styles.cardBackGradient}
-          colors={['#8B72FF', '#7C5CFC', '#6B4AE0']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+    <Animated.View
+      style={[styles.cardWrap, { width: size, height: size * 1.15, transform: [{ scale: pulseAnim }] }]}
+    >
+      {/* 单一 Pressable 承载点击：TouchableOpacity 的按压效果会驱动 opacity，
+          与 Animated 原生驱动的 opacity 插值抢同一属性（点击瞬间闪烁的元凶），故不可用 */}
+      <Pressable style={styles.cardTouch} onPress={() => onPress(card)} disabled={isFront}>
+        {/* 正面（单词/中文） */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.cardFace,
+            isFront && styles.cardFaceFront,
+            isMatched && styles.cardMatched,
+            { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontRotateY }] },
+          ]}
         >
-          <FontAwesome6 name="question" size={size * 0.22} color="rgba(255,255,255,0.9)" solid />
-          <View style={styles.cardBackDots}>
-            <View style={styles.cardBackDot} />
-            <View style={[styles.cardBackDot, styles.cardBackDotSm]} />
-          </View>
-        </LinearGradient>
-      </AnimatedTouchable>
+          <Text style={styles.cardEmoji} allowFontScaling={false}>
+            {card.emoji}
+          </Text>
+          <Text style={[styles.cardText, card.type === 'en' && styles.cardTextEn]} numberOfLines={2}>
+            {card.text}
+          </Text>
+          {card.type === 'en' && (
+            <View style={styles.speakerTag}>
+              <FontAwesome6 name="volume-high" size={9} color="#7C5CFC" />
+            </View>
+          )}
+        </Animated.View>
+
+        {/* 背面（问号） */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.cardFace,
+            styles.cardFaceBack,
+            !isFront && styles.cardBackVisible,
+            { opacity: backOpacity, transform: [{ perspective: 1000 }, { rotateY: backRotateY }] },
+          ]}
+        >
+          <LinearGradient
+            style={styles.cardBackGradient}
+            colors={['#8B72FF', '#7C5CFC', '#6B4AE0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <FontAwesome6 name="question" size={size * 0.22} color="rgba(255,255,255,0.9)" solid />
+            <View style={styles.cardBackDots}>
+              <View style={styles.cardBackDot} />
+              <View style={[styles.cardBackDot, styles.cardBackDotSm]} />
+            </View>
+          </LinearGradient>
+        </Animated.View>
+      </Pressable>
     </Animated.View>
   );
 });
@@ -926,6 +905,10 @@ const styles = StyleSheet.create({
   // 卡片（3D 翻转）
   cardWrap: {
     position: 'relative',
+  },
+  cardTouch: {
+    width: '100%',
+    height: '100%',
   },
   cardFace: {
     ...StyleSheet.absoluteFillObject,
