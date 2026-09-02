@@ -3,7 +3,28 @@ import { Platform } from 'react-native';
 import { Session, User } from '@supabase/supabase-js';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { initSupabaseClient, getSupabaseClient, clearSupabaseClient } from '@/lib/supabase';
+
+// 设备 ID 持久化 key：游客账号按设备隔离的基础
+const DEVICE_ID_KEY = 'kidx_device_id';
+
+/**
+ * 读取（或首次生成）本机设备 UUID，持久化到 AsyncStorage。
+ * 同一台设备始终返回同一 ID → 后端据此映射同一个设备专属游客账号。
+ */
+async function getOrCreateDeviceId(): Promise<string> {
+  try {
+    const stored = await AsyncStorage.getItem(DEVICE_ID_KEY);
+    if (stored && /^[0-9a-f-]{36}$/i.test(stored)) return stored;
+    const fresh = Crypto.randomUUID();
+    await AsyncStorage.setItem(DEVICE_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    // 存储异常时返回一次性 UUID（该次会话退化为共享账号不影响可用性）
+    return Crypto.randomUUID();
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -122,12 +143,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       /**
        * 服务端文件：server/src/routes/auth.ts
        * 接口：POST /api/v1/auth/guest
-       * Body 参数：无
+       * Body 参数：deviceId: string（本机持久化设备 UUID，用于映射设备专属游客账号，实现每台设备独立额度）
        * 返回：access_token: string, refresh_token: string
        */
+      const deviceId = await getOrCreateDeviceId();
       const response = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_BASE_URL}/api/v1/auth/guest`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId }),
       });
       if (!response.ok) {
         return { error: '游客登录失败，请稍后再试' };
