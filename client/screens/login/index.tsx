@@ -79,7 +79,8 @@ export default function LoginScreen() {
   }, [countdown]);
 
   const handleSendOtp = async () => {
-    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+    // eslint-disable-next-line regexp/no-super-linear-backtracking -- 仅做粗粒度格式校验，非安全正则
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim())) {
       Toast.show({ type: 'error', text1: '请输入正确的邮箱地址' });
       return;
     }
@@ -147,7 +148,7 @@ export default function LoginScreen() {
     await handleSendOtp();
   };
 
-  // 测试阶段专用：跳过登录，直接以游客身份进入
+  // 游客模式：以匿名游客身份直接进入（后端自动创建匿名账号）
   const handleSkipLogin = async () => {
     setGuestLoading(true);
     const result = await signInAsGuest();
@@ -261,7 +262,7 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* 测试阶段：跳过登录 */}
+          {/* 游客模式入口 */}
           <TouchableOpacity
             style={styles.skipButton}
             onPress={handleSkipLogin}
@@ -270,9 +271,10 @@ export default function LoginScreen() {
             {guestLoading ? (
               <ActivityIndicator size="small" color="#8B87A0" />
             ) : (
-              <Text style={styles.skipButtonText}>跳过登录，直接体验（测试）</Text>
+              <Text style={styles.skipButtonText}>先以游客身份体验</Text>
             )}
           </TouchableOpacity>
+          <Text style={styles.guestHintText}>游客数据保存在本机，登录后可同步并永久保留</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </Screen>
@@ -370,6 +372,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#8B87A0',
     textDecorationLine: 'underline',
+  },
+  guestHintText: {
+    fontSize: 12,
+    color: '#B0ACC7',
+    marginTop: 6,
+    textAlign: 'center',
   },
   otpTitle: {
     fontSize: 20,
