@@ -67,6 +67,9 @@ const hapticFail = () => {
 };
 
 /** 单张记忆卡片：3D 翻转动画 + 英文卡自动发音 + 配对成功脉冲 */
+// 支持 Animated 透明度驱动的触摸层（opacity 插值需要 Animated 组件承载）
+const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
+
 function MemoryCard({
   card,
   size,
@@ -115,6 +118,16 @@ function MemoryCard({
     outputRange: ['0deg', '180deg'],
   });
 
+  // 透明度交叉渐变（不依赖 backfaceVisibility，Web 端该属性不可靠）
+  const frontOpacity = flipAnim.interpolate({
+    inputRange: [0, 0.45, 0.55, 1],
+    outputRange: [0, 0, 1, 1],
+  });
+  const backOpacity = flipAnim.interpolate({
+    inputRange: [0, 0.45, 0.55, 1],
+    outputRange: [1, 1, 0, 0],
+  });
+
   const isFront = isFlipped || isMatched;
 
   return (
@@ -125,8 +138,8 @@ function MemoryCard({
       ]}
     >
       {/* 正面（单词/中文） */}
-      <TouchableOpacity
-        style={[styles.cardFace, isFront && styles.cardFaceFront, isMatched && styles.cardMatched]}
+      <AnimatedTouchable
+        style={[styles.cardFace, isFront && styles.cardFaceFront, isMatched && styles.cardMatched, { opacity: frontOpacity }]}
         onPress={onPress}
         activeOpacity={0.9}
         disabled={!isFront}
@@ -142,11 +155,11 @@ function MemoryCard({
             <FontAwesome6 name="volume-high" size={9} color="#7C5CFC" />
           </View>
         )}
-      </TouchableOpacity>
+      </AnimatedTouchable>
 
       {/* 背面（问号） */}
-      <TouchableOpacity
-        style={[styles.cardFace, styles.cardFaceBack, !isFront && styles.cardBackVisible]}
+      <AnimatedTouchable
+        style={[styles.cardFace, styles.cardFaceBack, !isFront && styles.cardBackVisible, { opacity: backOpacity }]}
         onPress={onPress}
         activeOpacity={0.9}
         disabled={isFront}
@@ -163,7 +176,7 @@ function MemoryCard({
             <View style={[styles.cardBackDot, styles.cardBackDotSm]} />
           </View>
         </LinearGradient>
-      </TouchableOpacity>
+      </AnimatedTouchable>
     </Animated.View>
   );
 }
