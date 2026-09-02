@@ -156,7 +156,7 @@ function TTSPlayer({
 
 export default function ChatScreen() {
   const router = useSafeRouter();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { command_type, commandId, commandText: commandTextParam } = useSafeSearchParams<{
     command_type: string;
     commandId?: number;
@@ -387,11 +387,24 @@ export default function ChatScreen() {
           }
           setIsStreaming(false);
           // 次数用完：后端返回 403（QUOTA_EXHAUSTED）
+          // 游客：优先引导登录（充值记录绑账号，防换机丢失）；已登录：直接引导充值
           if ((event as { status?: number })?.status === 403) {
-            Alert.alert('次数已用完', '聊天次数已经用完啦，请充值后继续和小精灵聊天哦', [
-              { text: '知道了', style: 'cancel' },
-              { text: '去充值', onPress: () => router.navigate('/paywall') },
-            ]);
+            if (user?.is_anonymous) {
+              Alert.alert(
+                '次数已用完',
+                '登录后充值，次数永久保存，换手机也不丢失',
+                [
+                  { text: '先逛逛', style: 'cancel' },
+                  { text: '直接充值', onPress: () => router.navigate('/paywall') },
+                  { text: '去登录', onPress: () => router.push('/login') },
+                ]
+              );
+            } else {
+              Alert.alert('次数已用完', '聊天次数已经用完啦，请充值后继续和伴伴聊天哦', [
+                { text: '知道了', style: 'cancel' },
+                { text: '去充值', onPress: () => router.navigate('/paywall') },
+              ]);
+            }
           }
         },
       },

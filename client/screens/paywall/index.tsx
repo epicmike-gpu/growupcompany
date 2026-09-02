@@ -18,9 +18,11 @@ import {
 } from '@/services/purchase';
 import { useFocusEffect } from 'expo-router';
 import { getSupabaseClient } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function PaywallScreen() {
   const router = useSafeRouter();
+  const { user } = useAuth();
   const [products, setProducts] = useState<BillingProduct[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,6 +119,20 @@ export default function PaywallScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
+          {/* 游客提示条：引导先登录，防止购买记录随设备丢失 */}
+          {user?.is_anonymous && (
+            <TouchableOpacity
+              style={styles.guestBanner}
+              activeOpacity={0.85}
+              onPress={() => router.push('/login')}
+            >
+              <FontAwesome6 name="triangle-exclamation" size={16} color="#B45309" />
+              <Text style={styles.guestBannerText}>
+                游客模式下购买的次数仅保存在本机，卸载或换手机会丢失。建议先登录再充值
+              </Text>
+              <FontAwesome6 name="chevron-right" size={13} color="#B45309" />
+            </TouchableOpacity>
+          )}
           {/* 余额卡 */}
           <View style={styles.balanceCard}>
             <View style={styles.balanceIconWrap}>
@@ -242,6 +258,25 @@ const styles = StyleSheet.create({
     color: '#2D2A45',
   },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 24 },
+  guestBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 14,
+  },
+  guestBannerText: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#B45309',
+    fontWeight: '500',
+  },
   balanceCard: {
     flexDirection: 'row',
     alignItems: 'center',
