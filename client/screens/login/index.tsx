@@ -24,8 +24,8 @@ export default function LoginScreen() {
   const { signInWithOtp, verifyOtp, signInAsGuest, signInWithApple, isAuthenticated } = useAuth();
   const router = useSafeRouter();
 
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState<'email' | 'otp'>('email');
+  const [email, setEmail] = useState('');
   const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
@@ -79,12 +79,12 @@ export default function LoginScreen() {
   }, [countdown]);
 
   const handleSendOtp = async () => {
-    if (phone.length < 11) {
-      Toast.show({ type: 'error', text1: '请输入正确的手机号' });
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
+      Toast.show({ type: 'error', text1: '请输入正确的邮箱地址' });
       return;
     }
     setLoading(true);
-    const result = await signInWithOtp(phone);
+    const result = await signInWithOtp(email.trim());
     setLoading(false);
 
     if (result.error) {
@@ -131,7 +131,7 @@ export default function LoginScreen() {
 
   const handleVerifyOtp = async (otpCode: string) => {
     setLoading(true);
-    const result = await verifyOtp(phone, otpCode);
+    const result = await verifyOtp(email.trim(), otpCode);
     setLoading(false);
 
     if (result.error) {
@@ -180,27 +180,23 @@ export default function LoginScreen() {
 
           {/* Login Form */}
           <View style={styles.formContainer}>
-            {step === 'phone' ? (
+            {step === 'email' ? (
               <>
-                <View style={styles.phoneInputContainer}>
-                  <View style={styles.countryCode}>
-                    <Text style={styles.countryCodeText}>+86</Text>
-                  </View>
-                  <TextInput
-                    style={styles.phoneInput}
-                    placeholder="请输入手机号"
-                    placeholderTextColor="#8B87A0"
-                    keyboardType="phone-pad"
-                    maxLength={11}
-                    value={phone}
-                    onChangeText={setPhone}
-                  />
-                </View>
+                <TextInput
+                  style={styles.emailInput}
+                  placeholder="请输入邮箱地址"
+                  placeholderTextColor="#8B87A0"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={email}
+                  onChangeText={setEmail}
+                />
 
                 <TouchableOpacity
-                  style={[styles.primaryButton, (!phone || loading) && styles.disabledButton]}
+                  style={[styles.primaryButton, (!email || loading) && styles.disabledButton]}
                   onPress={handleSendOtp}
-                  disabled={!phone || loading}
+                  disabled={!email || loading}
                 >
                   {loading ? (
                     <ActivityIndicator color="#FFF" />
@@ -212,7 +208,7 @@ export default function LoginScreen() {
             ) : (
               <>
                 <Text style={styles.otpTitle}>输入验证码</Text>
-                <Text style={styles.otpSubtitle}>已发送至 +86 {phone}</Text>
+                <Text style={styles.otpSubtitle} numberOfLines={1}>验证码已发送至 {email.trim()}</Text>
 
                 <View style={styles.otpContainer}>
                   {otpValues.map((digit, index) => (
@@ -243,11 +239,11 @@ export default function LoginScreen() {
                 <TouchableOpacity
                   style={styles.backButton}
                   onPress={() => {
-                    setStep('phone');
+                    setStep('email');
                     setOtpValues(['', '', '', '', '', '']);
                   }}
                 >
-                  <Text style={styles.backButtonText}>更换手机号</Text>
+                  <Text style={styles.backButtonText}>更换邮箱</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -323,7 +319,7 @@ const styles = StyleSheet.create({
   formContainer: {
     gap: 16,
   },
-  phoneInputContainer: {
+  emailInput: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -332,29 +328,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(124,92,252,0.15)',
     paddingHorizontal: 16,
     height: 56,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D2B3D',
     shadowColor: '#7C5CFC',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 4,
-  },
-  countryCode: {
-    paddingRight: 12,
-    borderRightWidth: 1,
-    borderRightColor: '#EDE8FF',
-  },
-  countryCodeText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2D2B3D',
-  },
-  phoneInput: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2D2B3D',
-    paddingLeft: 12,
-    height: '100%',
   },
   primaryButton: {
     backgroundColor: '#7C5CFC',

@@ -11,8 +11,8 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isConfigReady: boolean;
-  signInWithOtp: (phone: string) => Promise<{ error?: string }>;
-  verifyOtp: (phone: string, token: string) => Promise<{ error?: string }>;
+  signInWithOtp: (email: string) => Promise<{ error?: string }>;
+  verifyOtp: (email: string, token: string) => Promise<{ error?: string }>;
   signInWithApple: () => Promise<{ error?: string }>;
   signInAsGuest: () => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
@@ -79,11 +79,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const signInWithOtp = useCallback(async (phone: string) => {
+  const signInWithOtp = useCallback(async (email: string) => {
     try {
       const supabase = getSupabaseClient();
       const { error } = await supabase.auth.signInWithOtp({
-        phone: '+86' + phone,
+        email,
+        options: { shouldCreateUser: true },
       });
       if (error) return { error: error.message };
       return {};
@@ -92,13 +93,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const verifyOtp = useCallback(async (phone: string, token: string) => {
+  const verifyOtp = useCallback(async (email: string, token: string) => {
     try {
       const supabase = getSupabaseClient();
       const { data, error } = await supabase.auth.verifyOtp({
-        phone: '+86' + phone,
+        email,
         token,
-        type: 'sms',
+        type: 'email',
       });
       if (error) return { error: error.message };
 
