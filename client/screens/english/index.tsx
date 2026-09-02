@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -70,7 +70,7 @@ const hapticFail = () => {
 // 支持 Animated 透明度驱动的触摸层（opacity 插值需要 Animated 组件承载）
 const AnimatedTouchable = Animated.createAnimatedComponent(TouchableOpacity);
 
-function MemoryCard({
+const MemoryCard = React.memo(function MemoryCard({
   card,
   size,
   isFlipped,
@@ -81,7 +81,7 @@ function MemoryCard({
   size: number;
   isFlipped: boolean;
   isMatched: boolean;
-  onPress: () => void;
+  onPress: (card: CardData) => void;
 }) {
   // 用 useState 初始化 Animated.Value（稳定引用，且避免渲染期访问 ref）
   const [flipAnim] = useState(() => new Animated.Value(0));
@@ -114,23 +114,40 @@ function MemoryCard({
 
   // 两段式翻转（原生端稳定）：背层 0→90° 转出，正面层 90°→0° 转入。
   // 每层只有一层独立 rotateY，无嵌套旋转（原生端不支持嵌套 3D 场景合成），
-  // 也不依赖 backfaceVisibility（Web 端该属性不可靠）
-  const backRotateY = flipAnim.interpolate({
-    inputRange: [0, 0.5],
-    outputRange: ['0deg', '90deg'],
-  });
-  const frontRotateY = flipAnim.interpolate({
-    inputRange: [0.5, 1],
-    outputRange: ['90deg', '0deg'],
-  });
-  const frontOpacity = flipAnim.interpolate({
-    inputRange: [0, 0.45, 0.5, 0.6, 1],
-    outputRange: [0, 0, 0, 1, 1],
-  });
-  const backOpacity = flipAnim.interpolate({
-    inputRange: [0, 0.45, 0.5, 1],
-    outputRange: [1, 1, 0, 0],
-  });
+  // 也不依赖 backfaceVisibility（Web 端该属性不可靠）。
+  // 插值必须 useMemo 缓存：每次渲染新建插值节点会导致原生动画节点反复重建（表现为闪烁）
+  const backRotateY = useMemo(
+    () =>
+      flipAnim.interpolate({
+        inputRange: [0, 0.5],
+        outputRange: ['0deg', '90deg'],
+      }),
+    [flipAnim]
+  );
+  const frontRotateY = useMemo(
+    () =>
+      flipAnim.interpolate({
+        inputRange: [0.5, 1],
+        outputRange: ['90deg', '0deg'],
+      }),
+    [flipAnim]
+  );
+  const frontOpacity = useMemo(
+    () =>
+      flipAnim.interpolate({
+        inputRange: [0, 0.45, 0.5, 0.6, 1],
+        outputRange: [0, 0, 0, 1, 1],
+      }),
+    [flipAnim]
+  );
+  const backOpacity = useMemo(
+    () =>
+      flipAnim.interpolate({
+        inputRange: [0, 0.45, 0.5, 1],
+        outputRange: [1, 1, 0, 0],
+      }),
+    [flipAnim]
+  );
 
   const isFront = isFlipped || isMatched;
 
@@ -144,7 +161,7 @@ function MemoryCard({
           isMatched && styles.cardMatched,
           { opacity: frontOpacity, transform: [{ perspective: 1000 }, { rotateY: frontRotateY }] },
         ]}
-        onPress={onPress}
+        onPress={() => onPress(card)}
         activeOpacity={0.9}
         disabled={!isFront}
       >
@@ -169,7 +186,7 @@ function MemoryCard({
           !isFront && styles.cardBackVisible,
           { opacity: backOpacity, transform: [{ perspective: 1000 }, { rotateY: backRotateY }] },
         ]}
-        onPress={onPress}
+        onPress={() => onPress(card)}
         activeOpacity={0.9}
         disabled={isFront}
       >
@@ -188,7 +205,7 @@ function MemoryCard({
       </AnimatedTouchable>
     </Animated.View>
   );
-}
+});
 
 /** 结果页星级 */
 function StarRow({ stars }: { stars: number }) {
@@ -384,13 +401,16 @@ export default function EnglishScreen() {
   }, [screen, timedOut, stars, attempts, bestKey]);
 
   // 翻牌（matched 以 pairId 记录，配对成功的卡不可再翻）
-  const handleFlip = (card: CardData) => {
-    if (flipped.length >= 2) return;
-    if (flipped.includes(card.id)) return;
-    if (matched.has(card.pairId)) return;
-    hapticFlip();
-    setFlipped((prev) => [...prev, card.id]);
-  };
+  const handleFlip = useCallback(
+    (card: CardData) => {
+      if (flipped.length >= 2) return;
+      if (flipped.includes(card.id)) return;
+      if (matched.has(card.pairId)) return;
+      hapticFlip();
+      setFlipped((prev) => [...prev, card.id]);
+    },
+    [flipped, matched]
+  );
 
   // 游戏中退出确认
   const confirmExit = () => {
@@ -549,7 +569,7 @@ export default function EnglishScreen() {
                 size={cardWidth}
                 isFlipped={isFlipped}
                 isMatched={isMatched}
-                onPress={() => handleFlip(card)}
+                onPress={handleFlip}
               />
             );
           })}
