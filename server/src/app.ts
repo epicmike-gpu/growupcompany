@@ -8,6 +8,7 @@ import englishRouter from "./routes/english.js";
 import authRouter from "./routes/auth.js";
 import tasksRouter from "./routes/tasks.js";
 import billingRouter from "./routes/billing.js";
+import diagRouter from "./routes/diag.js";
 
 const app = express();
 
@@ -30,5 +31,6 @@ app.use('/api/v1/voice', voiceRouter);
 app.use('/api/v1/english', englishRouter);
 app.use('/api/v1/tasks', tasksRouter);
 app.use('/api/v1/billing', billingRouter);
+app.use('/api/v1/diag', diagRouter);
 
 export default app;
