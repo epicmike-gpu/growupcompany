@@ -163,7 +163,7 @@ export default function PaywallScreen() {
                     </View>
                   </View>
                   <Text style={styles.productPrice}>
-                    ¥{(p.price_cents / 100).toFixed(1)}
+                    ${(p.price_cents / 100).toFixed(2)}
                   </Text>
                   <View
                     style={[styles.radio, active && styles.radioActive]}
@@ -201,7 +201,7 @@ export default function PaywallScreen() {
             ) : (
               <Text style={styles.payBtnText}>
                 {selectedProduct
-                  ? `¥${(selectedProduct.price_cents / 100).toFixed(1)} 立即充值`
+                  ? `$${(selectedProduct.price_cents / 100).toFixed(2)} 立即充值`
                   : '请选择充值档位'}
               </Text>
             )}

@@ -4,7 +4,8 @@ import { getSupabaseClient } from '../storage/database/supabase-client.js';
 const router = Router();
 
 // ==================== 商品配置 ====================
-// 上架 App Store 时：在 App Store Connect 创建相同 product_id 的消耗型内购商品即可
+// 定价：美区 App Store 标准价位（USD）
+// 上架 App Store 时：在 App Store Connect 创建相同 product_id 的消耗型内购商品，定价与此处一致
 interface IapProduct {
   product_id: string;
   title: string;
@@ -22,16 +23,16 @@ const IAP_PRODUCTS: IapProduct[] = [
     title: '50 次对话',
     subtitle: '尝鲜体验 · 适合第一次充值',
     credits: 50,
-    price_cents: 990,
-    currency: 'CNY',
+    price_cents: 199,
+    currency: 'USD',
   },
   {
     product_id: 'com.kidx.credits.150',
     title: '150 次对话',
     subtitle: '比入门档多 2 倍次数，只贵一倍',
     credits: 150,
-    price_cents: 1990,
-    currency: 'CNY',
+    price_cents: 399,
+    currency: 'USD',
     tag: '最受欢迎',
   },
   {
@@ -39,8 +40,8 @@ const IAP_PRODUCTS: IapProduct[] = [
     title: '400 次对话',
     subtitle: '大额更划算 · 长期陪伴首选',
     credits: 400,
-    price_cents: 3990,
-    currency: 'CNY',
+    price_cents: 799,
+    currency: 'USD',
     tag: '超值',
   },
 ];
